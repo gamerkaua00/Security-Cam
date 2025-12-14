@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
-    <title>SecuriCam V16 Base</title>
+    <title>SecuriCam V20</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -13,17 +13,17 @@
     <link id="manifest-placeholder" rel="manifest">
 
     <style>
-        /* Base Dark Mode */
+        /* Base */
         body { background-color: #000; color: #fff; overflow: hidden; height: 100vh; width: 100vw; font-family: system-ui, sans-serif; user-select: none; }
         
-        /* Video Full */
+        /* Video Container */
         #video-wrapper { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; }
         
         video { 
             width: 100%; height: 100%; 
             object-fit: contain; 
             transform: translateZ(0); will-change: transform;
-            transition: object-fit 0.3s ease, opacity 0.3s;
+            transition: object-fit 0.3s ease;
         }
         video.filled { object-fit: cover; }
         video.offline { opacity: 0.3; filter: grayscale(100%); }
@@ -36,7 +36,7 @@
         }
         .float-btn:active { background: rgba(255,255,255,0.3); transform: scale(0.95); }
 
-        /* Botão Falar (PTT) */
+        /* Botão Falar */
         .talk-btn {
             position: absolute; bottom: 30px; right: 30px; z-index: 60;
             width: 72px; height: 72px; font-size: 24px;
@@ -46,15 +46,7 @@
         }
         .talk-btn:active, .talk-btn.talking { background: #ef4444; border-color: #fca5a5; transform: scale(0.95); box-shadow: 0 0 20px #ef4444; }
 
-        /* Listas de Câmeras Salvas */
-        .cam-item {
-            display: flex; justify-content: space-between; align-items: center;
-            background: #171717; border: 1px solid #333; padding: 12px; border-radius: 8px;
-            margin-bottom: 8px; transition: background 0.2s;
-        }
-        .cam-item:active { background: #262626; }
-
-        /* Badges */
+        /* Badges e Status */
         .badge {
             position: absolute; z-index: 50;
             background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
@@ -64,11 +56,16 @@
         .top-left { top: 20px; left: 20px; color: #4ade80; }
         .top-right { top: 20px; right: 20px; color: #c084fc; }
 
-        /* Status de Conexão */
         .status-overlay {
             position: absolute; inset: 0; background: rgba(0,0,0,0.8); z-index: 30;
             display: flex; flex-col; align-items: center; justify-content: center;
             backdrop-filter: blur(5px);
+        }
+
+        /* MODO STEALTH REAL (Preto absoluto) */
+        #stealth-layer {
+            position: fixed; inset: 0; background-color: #000000; z-index: 9999;
+            display: none; cursor: none; /* Esconde mouse no PC */
         }
     </style>
 </head>
@@ -78,9 +75,9 @@
     <div id="ui-setup" class="absolute inset-0 z-50 bg-neutral-950 flex flex-col p-6 overflow-y-auto">
         <div class="w-full max-w-sm mx-auto mt-10">
             <div class="text-center mb-8">
-                <i class="fa-solid fa-shield-halved text-4xl text-sky-500 mb-2"></i>
-                <h1 class="text-2xl font-bold text-white">SECURICAM <span class="text-sky-500">V16</span></h1>
-                <p class="text-[10px] text-zinc-500 uppercase tracking-widest">Base Stable • Multi-Cam</p>
+                <i class="fa-solid fa-shield-cat text-4xl text-sky-500 mb-2"></i>
+                <h1 class="text-2xl font-bold text-white">SECURICAM <span class="text-sky-500">V20</span></h1>
+                <p class="text-[10px] text-zinc-500 uppercase tracking-widest">Base V16 + Stealth</p>
             </div>
 
             <!-- Abas -->
@@ -91,7 +88,7 @@
 
             <!-- Formulário -->
             <form onsubmit="app.saveAndStart(event)" class="space-y-3">
-                <input type="text" id="inp-name" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-white focus:border-sky-500 outline-none" placeholder="Apelido (ex: Garagem)" autocomplete="off">
+                <input type="text" id="inp-name" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-white focus:border-sky-500 outline-none" placeholder="Apelido (ex: Quarto)" autocomplete="off">
                 <div class="flex gap-2">
                     <input type="text" id="inp-id" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-white font-mono uppercase focus:border-sky-500 outline-none" placeholder="ID CÂMERA" required autocomplete="off">
                     <input type="password" id="inp-pin" class="w-24 bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-center text-white font-mono focus:border-sky-500 outline-none" placeholder="PIN" required inputmode="numeric">
@@ -101,15 +98,16 @@
                 </button>
             </form>
 
-            <!-- Lista de Câmeras Salvas -->
             <div id="saved-list-container" class="mt-8 hidden">
-                <h3 class="text-xs text-zinc-500 uppercase font-bold mb-3 ml-1">Câmeras Salvas</h3>
-                <div id="saved-list" class="space-y-2">
-                    <!-- Itens gerados via JS -->
-                </div>
+                <h3 class="text-xs text-zinc-500 uppercase font-bold mb-3 ml-1">Salvos</h3>
+                <div id="saved-list" class="space-y-2"></div>
             </div>
 
             <div id="log" class="text-center text-xs text-red-400 mt-6 min-h-[20px] font-mono"></div>
+            
+            <div class="mt-8 p-4 bg-zinc-900 rounded text-[10px] text-zinc-400 border border-zinc-800">
+                <b>Dica Notebook:</b> Configure energia para "Não fazer nada" ao fechar a tampa.
+            </div>
         </div>
     </div>
 
@@ -119,11 +117,10 @@
             <video id="vid-main" autoplay playsinline webkit-playsinline></video>
             <audio id="audio-intercom" autoplay></audio>
 
-            <!-- Status de Queda/Reconexão -->
+            <!-- Status Reconnect -->
             <div id="reconnect-overlay" class="status-overlay hidden">
                 <i class="fa-solid fa-wifi text-yellow-500 text-4xl mb-4 animate-pulse"></i>
                 <span class="text-yellow-500 font-bold tracking-widest text-sm">RECONECTANDO...</span>
-                <span class="text-zinc-500 text-xs mt-2">Sinal fraco ou Câmera offline</span>
             </div>
 
             <!-- Badges -->
@@ -135,14 +132,23 @@
             </div>
             
             <!-- CONTROLES -->
+
+            <!-- Botão STEALTH (Só Câmera) -->
+            <button id="btn-stealth" onclick="ui.activateStealth()" class="float-btn w-12 h-12 absolute top-16 right-5 z-50 hidden text-zinc-400 border-zinc-700 bg-black/60 shadow-lg">
+                <i class="fa-solid fa-ghost"></i>
+            </button>
+
+            <!-- Botão Zoom (Só Monitor) -->
             <button id="btn-fit" onclick="ui.toggleFit()" class="float-btn w-10 h-10 absolute top-16 right-5 z-50 hidden">
                 <i class="fa-solid fa-expand" id="icon-fit"></i>
             </button>
 
+            <!-- Botão Falar (Só Monitor) -->
             <button id="btn-talk" class="talk-btn hidden" onmousedown="app.startTalk()" onmouseup="app.stopTalk()" ontouchstart="app.startTalk()" ontouchend="app.stopTalk()">
                 <i class="fa-solid fa-microphone"></i>
             </button>
 
+            <!-- Botão Som -->
             <button id="btn-sound" onclick="ui.unlockAudio()" class="absolute z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-sky-600 text-white px-6 py-3 rounded-full font-bold hidden shadow-xl animate-bounce">
                 <i class="fa-solid fa-volume-high mr-2"></i> ATIVAR SOM
             </button>
@@ -169,23 +175,23 @@
         </div>
     </div>
 
+    <!-- CAMADA STEALTH (PRETO TOTAL) -->
+    <div id="stealth-layer" ondblclick="ui.deactivateStealth()">
+        <!-- Vazio propositalmente para ser 100% preto -->
+    </div>
+
     <!-- Keep Awake -->
     <audio id="keep-alive" loop style="display:none;">
         <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA//oeAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD//////////////////////////////////////////////////////////////////wAAAAA=" type="audio/mpeg">
     </audio>
 
     <script>
-        // === CONFIG & CONSTANTS ===
-        const PREFIX = "sc16-base-"; 
-        const ICE_SERVERS = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        };
-
-        // PWA Gen
-        const m = { "name": "SecuriCam V16", "display": "standalone", "background_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
+        // === CONFIG BASE (V16) ===
+        const PREFIX = "sc20-base-"; 
+        const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+        
+        // PWA
+        const m = { "name": "SecuriCam V20", "display": "standalone", "background_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
         document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(new Blob([JSON.stringify(m)], {type: 'application/json'})));
 
         // === UI MODULE ===
@@ -194,42 +200,37 @@
             
             setMode: (m) => {
                 ui.mode = m;
-                const bC = document.getElementById('tab-cam');
-                const bM = document.getElementById('tab-mon');
-                const bS = document.getElementById('btn-start');
-                const list = document.getElementById('saved-list-container');
-                const nameInp = document.getElementById('inp-name');
-
+                const bC=document.getElementById('tab-cam'), bM=document.getElementById('tab-mon'), bS=document.getElementById('btn-start');
+                const list=document.getElementById('saved-list-container'), inp=document.getElementById('inp-name');
                 if (m === 'camera') {
                     bC.className="flex-1 py-3 text-xs font-bold rounded bg-sky-600 text-white shadow transition-all";
                     bM.className="flex-1 py-3 text-xs font-bold rounded text-zinc-500 hover:text-white transition-all";
-                    bS.className = bS.className.replace('bg-green-600','bg-sky-600'); bS.innerText = "TRANSMITIR";
-                    list.classList.add('hidden'); // Esconde lista na câmera
-                    nameInp.classList.add('hidden');
+                    bS.className=bS.className.replace('bg-green-600','bg-sky-600'); bS.innerText="TRANSMITIR";
+                    list.classList.add('hidden'); inp.classList.add('hidden');
                 } else {
                     bM.className="flex-1 py-3 text-xs font-bold rounded bg-green-600 text-white shadow transition-all";
                     bC.className="flex-1 py-3 text-xs font-bold rounded text-zinc-500 hover:text-white transition-all";
-                    bS.className = bS.className.replace('bg-sky-600','bg-green-600'); bS.innerText = "ASSISTIR";
-                    list.classList.remove('hidden'); // Mostra lista no monitor
-                    nameInp.classList.remove('hidden');
+                    bS.className=bS.className.replace('bg-sky-600','bg-green-600'); bS.innerText="ASSISTIR";
+                    list.classList.remove('hidden'); inp.classList.remove('hidden');
                     storage.renderList();
                 }
             },
 
-            log: (msg) => {
-                const el = document.getElementById('log');
-                el.innerText = msg;
-                if(msg) setTimeout(()=> el.innerText = "", 4000);
-            },
+            log: (msg) => { const e=document.getElementById('log'); e.innerText=msg; if(msg) setTimeout(()=>e.innerText="", 4000); },
 
             toggleFit: () => {
-                const v = document.getElementById('vid-main');
-                const i = document.getElementById('icon-fit');
-                if (v.classList.contains('filled')) {
-                    v.classList.remove('filled'); i.classList.replace('fa-compress', 'fa-expand');
-                } else {
-                    v.classList.add('filled'); i.classList.replace('fa-expand', 'fa-compress');
-                }
+                const v = document.getElementById('vid-main'), i = document.getElementById('icon-fit');
+                if(v.classList.contains('filled')) { v.classList.remove('filled'); i.classList.replace('fa-compress','fa-expand'); }
+                else { v.classList.add('filled'); i.classList.replace('fa-expand','fa-compress'); }
+            },
+
+            activateStealth: () => {
+                alert("Modo Furtivo: Tela ficará preta.\n\nDê DUPLO CLIQUE para sair.");
+                document.getElementById('stealth-layer').style.display = 'block';
+            },
+            
+            deactivateStealth: () => {
+                document.getElementById('stealth-layer').style.display = 'none';
             },
 
             unlockAudio: () => {
@@ -245,298 +246,190 @@
             }
         };
 
-        // === STORAGE MODULE (MULTI-CAMERA) ===
+        // === STORAGE (MULTI-CAM) ===
         const storage = {
-            get: () => JSON.parse(localStorage.getItem('sc_cameras') || '[]'),
+            get: () => JSON.parse(localStorage.getItem('sc_cams') || '[]'),
             add: (name, id, pin) => {
                 if(!name) return;
-                const list = storage.get();
-                // Remove duplicates
-                const newList = list.filter(c => c.id !== id);
-                newList.push({name, id, pin});
-                localStorage.setItem('sc_cameras', JSON.stringify(newList));
+                const list = storage.get().filter(c => c.id !== id);
+                list.push({name, id, pin});
+                localStorage.setItem('sc_cams', JSON.stringify(list));
             },
             remove: (id) => {
                 const list = storage.get().filter(c => c.id !== id);
-                localStorage.setItem('sc_cameras', JSON.stringify(list));
+                localStorage.setItem('sc_cams', JSON.stringify(list));
                 storage.renderList();
             },
             renderList: () => {
-                const list = storage.get();
                 const container = document.getElementById('saved-list');
                 container.innerHTML = "";
-                list.forEach(cam => {
+                storage.get().forEach(cam => {
                     const div = document.createElement('div');
-                    div.className = "cam-item";
+                    div.className = "flex justify-between items-center bg-zinc-900 border border-zinc-800 p-3 rounded-lg mb-2";
                     div.innerHTML = `
-                        <div class="flex-1 cursor-pointer" onclick="app.loadAndStart('${cam.id}', '${cam.pin}')">
+                        <div class="flex-1 cursor-pointer" onclick="app.load('${cam.id}', '${cam.pin}')">
                             <div class="text-sm font-bold text-white">${cam.name}</div>
                             <div class="text-[10px] text-zinc-500 font-mono">${cam.id}</div>
                         </div>
-                        <button onclick="storage.remove('${cam.id}')" class="text-zinc-600 hover:text-red-500 px-2">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+                        <button onclick="storage.remove('${cam.id}')" class="text-zinc-600 hover:text-red-500 px-2"><i class="fa-solid fa-trash"></i></button>
                     `;
                     container.appendChild(div);
                 });
             }
         };
 
-        // === APP LOGIC ===
+        // === APP LOGIC (BASE V16) ===
         const app = {
-            peer: null,
-            localStream: null,
-            micStream: null,
-            activeCall: null,
-            monitors: [],
-            videoDevices: [],
-            camIndex: 0,
-            watchdog: null,
-            isReconnecting: false,
-            
+            peer: null, localStream: null, micStream: null, activeCall: null,
+            monitors: [], videoDevices: [], camIndex: 0, watchdog: null,
+
             saveAndStart: (e) => {
                 e.preventDefault();
                 const name = document.getElementById('inp-name').value.trim();
-                const id = document.getElementById('inp-id').value.trim().replace(/\s/g, '').toLowerCase();
+                const id = document.getElementById('inp-id').value.trim().replace(/\s/g,'').toLowerCase();
                 const pin = document.getElementById('inp-pin').value.trim();
-                
-                if(!id || !pin) return ui.log("Preencha ID e PIN");
-                
-                // Se for monitor, salva na lista
-                if (ui.mode === 'monitor' && name) storage.add(name, id, pin);
-
+                if(!id||!pin) return ui.log("Preencha ID e PIN");
+                if(ui.mode === 'monitor' && name) storage.add(name, id, pin);
                 app.start(id, pin);
             },
-
-            loadAndStart: (id, pin) => {
+            load: (id, pin) => {
                 document.getElementById('inp-id').value = id;
                 document.getElementById('inp-pin').value = pin;
                 app.start(id, pin);
             },
-
             start: async (id, pin) => {
                 try { document.getElementById('keep-alive').play(); } catch(e){}
                 try { await navigator.wakeLock.request('screen'); } catch(e){}
-
                 document.getElementById('ui-setup').classList.add('hidden');
                 document.getElementById('ui-app').classList.remove('hidden');
-                
-                if (ui.mode === 'camera') app.startCamera(PREFIX + id, pin);
+                if(ui.mode === 'camera') app.startCamera(PREFIX + id, pin);
                 else app.startMonitor(PREFIX + id, pin);
             },
-
             stop: () => {
                 if(app.watchdog) clearInterval(app.watchdog);
                 if(app.localStream) { app.localStream.getTracks().forEach(t=>t.stop()); app.localStream=null; }
                 if(app.micStream) { app.micStream.getTracks().forEach(t=>t.stop()); app.micStream=null; }
                 if(app.peer) { app.peer.destroy(); app.peer=null; }
-                
-                app.monitors = [];
-                app.activeCall = null;
-                
+                app.monitors = []; app.activeCall = null;
                 document.getElementById('vid-main').srcObject = null;
                 document.getElementById('ui-app').classList.add('hidden');
                 document.getElementById('ui-setup').classList.remove('hidden');
                 document.getElementById('loader').classList.remove('hidden');
-                
-                // Esconder elementos específicos
-                ['btn-talk', 'btn-swap', 'btn-sound', 'btn-fit', 'badge-viewers', 'badge-status', 'reconnect-overlay'].forEach(id => document.getElementById(id).classList.add('hidden'));
-                
+                document.getElementById('stealth-layer').style.display = 'none';
+                ['btn-talk','btn-swap','btn-sound','btn-fit','badge-viewers','badge-status','reconnect-overlay','btn-stealth'].forEach(i=>document.getElementById(i).classList.add('hidden'));
                 if(ui.mode === 'monitor') storage.renderList();
             },
 
-            // --- CAMERA ---
+            // CAMERA (V16 CORE - LEVE)
             startCamera: async (myId, pin) => {
                 document.getElementById('btn-swap').classList.remove('hidden');
                 document.getElementById('badge-viewers').classList.remove('hidden');
+                document.getElementById('btn-stealth').classList.remove('hidden'); // Botão Stealth
                 document.getElementById('loader-txt').innerText = "INICIANDO...";
 
                 try {
                     const devs = await navigator.mediaDevices.enumerateDevices();
                     app.videoDevices = devs.filter(d => d.kind === 'videoinput');
-                    
-                    // VGA 20fps (Cool & Stable)
-                    const constraints = {
-                        audio: { echoCancellation: true, noiseSuppression: true },
-                        video: { facingMode: 'environment', width: 640, height: 480, frameRate: 20 }
-                    };
+                    // CONFIGURAÇÃO BASE V16 (VGA/20FPS)
+                    const constraints = { audio: { echoCancellation: true, noiseSuppression: true }, video: { facingMode: 'environment', width: 640, height: 480, frameRate: 20 } };
                     try { app.localStream = await navigator.mediaDevices.getUserMedia(constraints); }
                     catch(e) { app.localStream = await navigator.mediaDevices.getUserMedia({audio:true, video:true}); }
-                    
                     const v = document.getElementById('vid-main');
-                    v.srcObject = app.localStream;
-                    v.muted = true;
+                    v.srcObject = app.localStream; v.muted = true;
                 } catch(e) { alert("Erro Cam: "+e.message); app.stop(); return; }
 
-                app.initPeer(myId, pin);
-            },
-
-            initPeer: (id, pin) => {
-                app.peer = new Peer(id, { debug: 1, config: ICE_SERVERS });
-                
-                app.peer.on('open', () => {
-                    document.getElementById('loader').classList.add('hidden');
-                    ui.showReconnect(false);
-                });
-                
+                app.peer = new Peer(myId, { debug: 1, config: ICE_SERVERS });
+                app.peer.on('open', () => { document.getElementById('loader').classList.add('hidden'); ui.showReconnect(false); });
                 app.peer.on('error', e => {
                     if(e.type==='unavailable-id') { alert("Nome em uso!"); app.stop(); }
-                    else if(e.type==='network' || e.type==='disconnected') {
-                        ui.showReconnect(true);
-                        setTimeout(() => app.peer.reconnect(), 2000); // Phoenix Reconnect
-                    }
+                    else if(e.type==='network'||e.type==='disconnected') { ui.showReconnect(true); setTimeout(()=>app.peer.reconnect(), 2000); }
                 });
-                
-                app.peer.on('disconnected', () => {
-                    ui.showReconnect(true);
-                    app.peer.reconnect();
-                });
+                app.peer.on('disconnected', () => { ui.showReconnect(true); app.peer.reconnect(); });
 
                 app.peer.on('connection', conn => {
                     conn.on('data', data => {
-                        if (data.auth === pin) {
+                        if(data.auth === pin) {
                             app.monitors.push(conn);
                             document.getElementById('viewer-count').innerText = app.monitors.length;
-                            
                             const call = app.peer.call(conn.peer, app.localStream);
-                            
-                            // 800kbps limit
-                            const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                            const sender = call.peerConnection.getSenders().find(s=>s.track.kind==='video');
                             if(sender) {
                                 const p = sender.getParameters();
-                                if(!p.encodings) p.encodings = [{}];
-                                p.encodings[0].maxBitrate = 800000;
+                                if(!p.encodings) p.encodings=[{}];
+                                p.encodings[0].maxBitrate = 800000; // 800kbps (Leve)
                                 sender.setParameters(p).catch(()=>{});
                             }
-
-                            conn.on('close', () => {
-                                app.monitors = app.monitors.filter(c => c.peer !== conn.peer);
-                                document.getElementById('viewer-count').innerText = app.monitors.length;
-                            });
+                            conn.on('close', () => { app.monitors = app.monitors.filter(c=>c.peer!==conn.peer); document.getElementById('viewer-count').innerText = app.monitors.length; });
                         }
                     });
                 });
-                
-                // Intercom
-                app.peer.on('call', call => {
-                    call.answer();
-                    call.on('stream', st => {
-                        const aud = document.getElementById('audio-intercom');
-                        aud.srcObject = st; aud.play().catch(()=>{});
-                    });
-                });
+                app.peer.on('call', call => { call.answer(); call.on('stream', st => { const a=document.getElementById('audio-intercom'); a.srcObject=st; a.play().catch(()=>{}); }); });
             },
 
-            // --- MONITOR ---
+            // MONITOR
             startMonitor: (targetId, pin) => {
                 document.getElementById('btn-talk').classList.remove('hidden');
                 document.getElementById('btn-fit').classList.remove('hidden');
                 document.getElementById('badge-status').classList.remove('hidden');
-                
                 app.peer = new Peer(null, { debug: 1, config: ICE_SERVERS });
-
-                app.peer.on('open', () => {
-                    app.connectToCamera(targetId, pin);
-                });
-                
-                // Reconexão se o Monitor cair
+                app.peer.on('open', () => app.connect(targetId, pin));
                 app.peer.on('disconnected', () => app.peer.reconnect());
             },
-
-            connectToCamera: (targetId, pin) => {
+            connect: (targetId, pin) => {
                 const conn = app.peer.connect(targetId);
-                
-                conn.on('open', () => {
-                    ui.showReconnect(false);
-                    conn.send({auth: pin});
-                });
-
-                conn.on('close', () => {
-                    // Câmera caiu? Tenta de novo
-                    ui.showReconnect(true);
-                    setTimeout(() => app.connectToCamera(targetId, pin), 3000);
-                });
-
-                // Timeout inicial
-                setTimeout(() => {
-                    if(!document.getElementById('loader').classList.contains('hidden')) ui.showReconnect(true);
-                }, 8000);
-
+                conn.on('open', () => { ui.showReconnect(false); conn.send({auth: pin}); });
+                conn.on('close', () => { ui.showReconnect(true); setTimeout(()=>app.connect(targetId, pin), 3000); });
+                setTimeout(() => { if(!document.getElementById('loader').classList.contains('hidden')) ui.showReconnect(true); }, 8000);
                 app.peer.on('call', call => {
-                    app.activeCall = call;
-                    call.answer();
+                    app.activeCall = call; call.answer();
                     call.on('stream', stream => {
-                        document.getElementById('loader').classList.add('hidden');
-                        ui.showReconnect(false);
-                        
+                        document.getElementById('loader').classList.add('hidden'); ui.showReconnect(false);
                         const v = document.getElementById('vid-main');
-                        v.srcObject = stream;
-                        v.muted = false;
-                        
-                        v.play().catch(() => {
-                            v.muted = true; v.play();
-                            document.getElementById('btn-sound').classList.remove('hidden');
-                        });
-
-                        app.startWatchdog(v);
+                        v.srcObject = stream; v.muted = false;
+                        v.play().catch(() => { v.muted=true; v.play(); document.getElementById('btn-sound').classList.remove('hidden'); });
+                        app.watchdogStart(v);
                     });
-                    
                     call.on('close', () => ui.showReconnect(true));
                 });
             },
 
-            // --- UTILS ---
-            startWatchdog: (vid) => {
+            // UTILS (V16 WATCHDOG)
+            watchdogStart: (vid) => {
                 if(app.watchdog) clearInterval(app.watchdog);
-                let lastTime = 0;
-                
+                let lastTime=0;
                 app.watchdog = setInterval(() => {
-                    if(vid.paused || ui.mode !== 'monitor') return;
-                    
-                    // Congelamento Check
-                    if (vid.currentTime === lastTime && !document.getElementById('reconnect-overlay').classList.contains('hidden') === false) {
-                        // Se congelar e não estivermos já em modo de reconexão
-                        if(vid.buffered.length > 0) vid.currentTime = vid.buffered.end(0);
+                    if(vid.paused || ui.mode!=='monitor') return;
+                    if(vid.currentTime===lastTime && !document.getElementById('reconnect-overlay').classList.contains('hidden')===false) {
+                        if(vid.buffered.length>0) vid.currentTime=vid.buffered.end(0);
                     }
-                    lastTime = vid.currentTime;
-
-                    // Sync Check
-                    if(vid.buffered.length > 0) {
-                        const diff = vid.buffered.end(0) - vid.currentTime;
-                        if(diff > 1.5) vid.currentTime = vid.buffered.end(0);
-                        else if(diff > 0.3) vid.playbackRate = 1.1;
-                        else vid.playbackRate = 1.0;
+                    lastTime=vid.currentTime;
+                    if(vid.buffered.length>0) {
+                        const diff=vid.buffered.end(0)-vid.currentTime;
+                        if(diff>1.5) vid.currentTime=vid.buffered.end(0);
+                        else if(diff>0.3) vid.playbackRate=1.1;
+                        else vid.playbackRate=1.0;
                     }
                 }, 1000);
             },
-
             startTalk: async () => {
-                if (!app.activeCall || ui.mode !== 'monitor') return;
+                if(!app.activeCall || ui.mode!=='monitor') return;
                 document.getElementById('btn-talk').classList.add('talking');
-                try {
-                    app.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    app.peer.call(app.activeCall.peer, app.micStream);
-                } catch(e) { alert("Mic bloqueado"); }
+                try { app.micStream = await navigator.mediaDevices.getUserMedia({audio:true}); app.peer.call(app.activeCall.peer, app.micStream); } catch(e){ alert("Mic bloqueado"); }
             },
-
             stopTalk: () => {
                 document.getElementById('btn-talk').classList.remove('talking');
-                if (app.micStream) { app.micStream.getTracks().forEach(t=>t.stop()); app.micStream=null; }
+                if(app.micStream) { app.micStream.getTracks().forEach(t=>t.stop()); app.micStream=null; }
             },
-            
             swapCam: async () => {
-                 if(!app.localStream || app.videoDevices.length < 2) return;
-                 app.camIndex = (app.camIndex + 1) % app.videoDevices.length;
-                 app.localStream.getTracks().forEach(t => t.stop());
-                 app.localStream = await navigator.mediaDevices.getUserMedia({
-                     audio: { echoCancellation: true },
-                     video: { deviceId: { exact: app.videoDevices[app.camIndex].deviceId }, width: 640, height: 480, frameRate: 20 }
-                 });
-                 document.getElementById('vid-main').srcObject = app.localStream;
-                 Object.values(app.peer.connections).forEach(conns => conns.forEach(c => {
-                     const s = c.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                     if(s) s.replaceTrack(app.localStream.getVideoTracks()[0]);
-                 }));
+                if(!app.localStream || app.videoDevices.length<2) return;
+                app.camIndex=(app.camIndex+1)%app.videoDevices.length;
+                app.localStream.getTracks().forEach(t=>t.stop());
+                app.localStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true}, video:{deviceId:{exact:app.videoDevices[app.camIndex].deviceId}, width:640, height:480, frameRate:20}});
+                document.getElementById('vid-main').srcObject=app.localStream;
+                Object.values(app.peer.connections).forEach(conns=>conns.forEach(c=>{
+                    const s=c.peerConnection.getSenders().find(s=>s.track.kind==='video');
+                    if(s) s.replaceTrack(app.localStream.getVideoTracks()[0]);
+                }));
             }
         };
     </script>
