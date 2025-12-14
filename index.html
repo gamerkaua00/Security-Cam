@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
-    <title>SecuriCam V23</title>
+    <title>SecuriCam V25 Silent</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -21,9 +21,10 @@
         video { 
             width: 100%; height: 100%; 
             object-fit: contain; 
-            transform: translateZ(0);
+            transform: translateZ(0); will-change: transform;
         }
         video.filled { object-fit: cover; }
+        video.offline { opacity: 0.3; filter: grayscale(100%); }
 
         /* Botões */
         .float-btn {
@@ -40,18 +41,14 @@
             backdrop-filter: blur(5px); border-radius: 50%; display: flex; align-items: center; justify-content: center;
             box-shadow: 0 0 15px rgba(37, 99, 235, 0.3);
         }
-        .talk-btn:active, .talk-btn.talking { 
-            background: #2563eb; border-color: #93c5fd; transform: scale(0.95); 
-            box-shadow: 0 0 25px #3b82f6; 
-        }
+        .talk-btn:active, .talk-btn.talking { background: #2563eb; border-color: #93c5fd; transform: scale(0.95); }
 
         /* Badges */
         .badge {
             position: absolute; z-index: 50;
-            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
-            padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(59, 130, 246, 0.2);
-            font-size: 12px; font-weight: bold; color: #60a5fa;
-            display: flex; align-items: center; gap: 6px;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);
+            font-size: 11px; font-weight: bold; color: #60a5fa; display: flex; align-items: center; gap: 6px;
         }
         .top-left { top: 20px; left: 20px; }
         .top-right { top: 20px; right: 20px; }
@@ -78,20 +75,18 @@
     <div id="ui-setup" class="absolute inset-0 z-50 bg-[#020617] flex flex-col p-6 overflow-y-auto">
         <div class="w-full max-w-sm mx-auto mt-8">
             <div class="text-center mb-8">
-                <i class="fa-solid fa-tower-broadcast text-4xl text-blue-500 mb-2"></i>
-                <h1 class="text-3xl font-black text-white tracking-tight">SECURICAM <span class="text-blue-500">V23</span></h1>
-                <p class="text-[10px] text-blue-300/50 uppercase tracking-widest mt-1 font-bold">V16 Core Restore</p>
+                <i class="fa-solid fa-fan text-4xl text-blue-500 mb-2"></i>
+                <h1 class="text-3xl font-black text-white tracking-tight">SECURICAM <span class="text-blue-500">V25</span></h1>
+                <p class="text-[10px] text-blue-300/50 uppercase tracking-widest mt-1 font-bold">Silent & Fast</p>
             </div>
 
-            <!-- Abas -->
             <div class="bg-blue-950/30 p-1.5 rounded-xl flex mb-6 border border-blue-900/50">
                 <button onclick="ui.setMode('camera')" id="tab-cam" class="flex-1 py-3 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-lg">TRANSMITIR</button>
                 <button onclick="ui.setMode('monitor')" id="tab-mon" class="flex-1 py-3 text-xs font-bold rounded-lg text-blue-400 hover:text-white">ASSISTIR</button>
             </div>
 
-            <!-- Formulário -->
             <form onsubmit="app.saveAndStart(event)" class="space-y-4">
-                <input type="text" id="inp-name" class="w-full bg-blue-950/20 border border-blue-900/50 rounded-xl p-4 text-white focus:border-blue-500 outline-none" placeholder="Apelido (ex: Garagem)" autocomplete="off">
+                <input type="text" id="inp-name" class="w-full bg-blue-950/20 border border-blue-900/50 rounded-xl p-4 text-white focus:border-blue-500 outline-none" placeholder="Apelido (ex: Sala)" autocomplete="off">
                 <div class="flex gap-3">
                     <input type="text" id="inp-id" class="w-full bg-blue-950/20 border border-blue-900/50 rounded-xl p-4 text-white font-mono uppercase focus:border-blue-500 outline-none" placeholder="ID CÂMERA" required autocomplete="off">
                     <input type="password" id="inp-pin" class="w-28 bg-blue-950/20 border border-blue-900/50 rounded-xl p-4 text-center text-white font-mono focus:border-blue-500 outline-none" placeholder="PIN" required inputmode="numeric">
@@ -114,6 +109,12 @@
             <video id="vid-main" autoplay playsinline webkit-playsinline></video>
             <audio id="audio-intercom" autoplay></audio>
 
+            <!-- Status Overlay -->
+            <div id="reconnect-overlay" class="status-overlay hidden absolute inset-0 bg-black/80 z-30 flex flex-col items-center justify-center backdrop-blur-sm">
+                <i class="fa-solid fa-wifi text-yellow-500 text-4xl mb-4 animate-pulse"></i>
+                <span class="text-yellow-500 font-bold text-sm">RECONECTANDO...</span>
+            </div>
+
             <!-- Badges -->
             <div id="badge-viewers" class="badge top-right hidden">
                 <i class="fa-solid fa-users text-blue-400"></i> <span id="viewer-count" class="text-white">0</span>
@@ -124,7 +125,7 @@
             
             <!-- CONTROLES -->
             
-            <!-- Botão STEALTH (Só Câmera) -->
+            <!-- Botão STEALTH (Câmera) -->
             <button id="btn-stealth" onclick="ui.toggleStealth()" class="float-btn w-12 h-12 absolute top-20 right-5 z-50 hidden bg-black/60 border-zinc-700 text-zinc-400">
                 <i class="fa-solid fa-ghost"></i>
             </button>
@@ -175,28 +176,21 @@
     </audio>
 
     <script>
-        // === V16 CORE CONFIG (O QUE FUNCIONA) ===
-        const ICE_SERVERS = { 
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ] 
-        };
-        const PREFIX = "sc-v23-core-";
+        // === CONFIG ===
+        const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+        const PREFIX = "sc25-silent-";
 
         // PWA
-        const m = { "name": "SecuriCam V23", "display": "standalone", "background_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
+        const m = { "name": "SecuriCam V25", "display": "standalone", "background_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
         document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(new Blob([JSON.stringify(m)], {type: 'application/json'})));
 
         // === UI MODULE ===
         const ui = {
             mode: 'camera',
-            
             setMode: (m) => {
                 ui.mode = m;
                 const bC=document.getElementById('tab-cam'), bM=document.getElementById('tab-mon'), bS=document.getElementById('btn-start');
                 const list=document.getElementById('saved-list-container'), inp=document.getElementById('inp-name');
-                
                 if (m === 'camera') {
                     bC.className="flex-1 py-3 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-lg transition-all";
                     bM.className="flex-1 py-3 text-xs font-bold rounded-lg text-blue-400 hover:text-white transition-all";
@@ -210,42 +204,39 @@
                     storage.renderList();
                 }
             },
-
             log: (msg) => { const e=document.getElementById('log'); e.innerText=msg; if(msg) setTimeout(()=>e.innerText="", 4000); },
-
             toggleFit: () => {
                 const v = document.getElementById('vid-main'), i = document.getElementById('icon-fit');
                 if(v.classList.contains('filled')) { v.classList.remove('filled'); i.classList.replace('fa-compress','fa-expand'); }
                 else { v.classList.add('filled'); i.classList.replace('fa-expand','fa-compress'); }
             },
-
             toggleStealth: () => {
                 const el = document.getElementById('stealth-layer');
-                if(el.style.display === 'none') {
-                    el.style.display = 'block';
-                    if(!sessionStorage.getItem('stealth_msg')) { alert("Tela Preta. Dois toques para sair."); sessionStorage.setItem('stealth_msg','1'); }
-                } else {
-                    el.style.display = 'none';
-                }
+                if(el.style.display === 'none') { el.style.display = 'block'; if(!sessionStorage.getItem('h25')) {alert("Stealth Ativo.\nDuplo clique para sair."); sessionStorage.setItem('h25','1');}}
+                else { el.style.display = 'none'; }
             },
-
             unlockAudio: () => {
                 const v = document.getElementById('vid-main');
                 v.muted = false; v.play();
                 document.getElementById('btn-sound').classList.add('hidden');
+            },
+            showReconnect: (show) => {
+                const el = document.getElementById('reconnect-overlay');
+                if(show) { el.classList.remove('hidden'); document.getElementById('vid-main').classList.add('offline'); }
+                else { el.classList.add('hidden'); document.getElementById('vid-main').classList.remove('offline'); }
             }
         };
 
         // === STORAGE ===
         const storage = {
-            get: () => JSON.parse(localStorage.getItem('sc_cams_v23') || '[]'),
+            get: () => JSON.parse(localStorage.getItem('sc_cams_v25') || '[]'),
             add: (name, id, pin) => {
                 const list = storage.get().filter(c => c.id !== id);
-                list.push({name: name || `Câmera ${id.slice(-3)}`, id, pin});
-                localStorage.setItem('sc_cams_v23', JSON.stringify(list));
+                list.push({name: name || `Cam ${id.slice(-3)}`, id, pin});
+                localStorage.setItem('sc_cams_v25', JSON.stringify(list));
             },
             remove: (id) => {
-                localStorage.setItem('sc_cams_v23', JSON.stringify(storage.get().filter(c => c.id !== id)));
+                localStorage.setItem('sc_cams_v25', JSON.stringify(storage.get().filter(c => c.id !== id)));
                 storage.renderList();
             },
             renderList: () => {
@@ -266,7 +257,7 @@
             }
         };
 
-        // === APP CORE (V16 RESTORED) ===
+        // === APP LOGIC ===
         const app = {
             peer: null, localStream: null, micStream: null, activeCall: null,
             monitors: [], videoDevices: [], camIndex: 0, watchdog: null,
@@ -308,7 +299,7 @@
                 if(ui.mode === 'monitor') storage.renderList();
             },
 
-            // CAMERA (NATIVE INIT - SEM RESTRIÇÃO INICIAL)
+            // CAMERA (SILENT MODE: 15FPS RAW)
             startCamera: async (myId, pin) => {
                 document.getElementById('btn-swap').classList.remove('hidden');
                 document.getElementById('badge-viewers').classList.remove('hidden');
@@ -319,30 +310,36 @@
                     const devs = await navigator.mediaDevices.enumerateDevices();
                     app.videoDevices = devs.filter(d => d.kind === 'videoinput');
                     
-                    // FALLBACK: Tenta native resolution primeiro para garantir que abre
-                    let stream;
+                    // CONFIGURAÇÃO ULTRA LEVE PARA NÃO ESQUENTAR
+                    // 15 FPS = Muito menos CPU
+                    // Áudio Raw = Zero processamento de software
+                    let constraints = { 
+                        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+                        video: { facingMode: 'environment', width: 640, height: 480, frameRate: 15 }
+                    };
+
                     try {
-                        stream = await navigator.mediaDevices.getUserMedia({ audio: {echoCancellation:true}, video: { facingMode: 'environment' } });
+                        app.localStream = await navigator.mediaDevices.getUserMedia(constraints);
                     } catch(err) {
-                        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                        app.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                     }
-                    app.localStream = stream;
+                    
                     const v = document.getElementById('vid-main');
                     v.srcObject = app.localStream; v.muted = true;
 
                 } catch(e) { alert("Erro Câmera: "+e.message); app.stop(); return; }
 
-                document.getElementById('loader-txt').innerText = "CRIANDO SERVIDOR...";
+                document.getElementById('loader-txt').innerText = "SERVIDOR...";
                 app.peer = new Peer(myId, { debug: 1, config: ICE_SERVERS });
                 
-                app.peer.on('open', () => {
-                    document.getElementById('loader').classList.add('hidden');
+                app.peer.on('open', () => { 
+                    document.getElementById('loader').classList.add('hidden'); 
                     document.getElementById('badge-status').classList.remove('hidden');
                 });
                 
                 app.peer.on('error', e => {
-                    if(e.type==='unavailable-id') { alert("Nome em uso!"); app.stop(); }
-                    else ui.log("Erro Rede: " + e.type);
+                    if(e.type==='unavailable-id') { alert("ID em uso!"); app.stop(); }
+                    else ui.log("Erro: " + e.type);
                 });
 
                 app.peer.on('connection', conn => {
@@ -352,11 +349,11 @@
                             document.getElementById('viewer-count').innerText = app.monitors.length;
                             const call = app.peer.call(conn.peer, app.localStream);
                             const sender = call.peerConnection.getSenders().find(s=>s.track.kind==='video');
-                            // Limita banda DEPOIS de conectar, para estabilidade
+                            // 500kbps (Leve e rápido)
                             if(sender) {
                                 const p = sender.getParameters();
                                 if(!p.encodings) p.encodings=[{}];
-                                p.encodings[0].maxBitrate = 1000000; // 1 Mbps (V16 standard)
+                                p.encodings[0].maxBitrate = 500000;
                                 sender.setParameters(p).catch(()=>{});
                             }
                             conn.on('close', () => { app.monitors = app.monitors.filter(c=>c.peer!==conn.peer); document.getElementById('viewer-count').innerText = app.monitors.length; });
@@ -367,7 +364,7 @@
                 app.peer.on('call', call => { call.answer(); call.on('stream', st => { const a=document.getElementById('audio-intercom'); a.srcObject=st; a.play().catch(()=>{}); }); });
             },
 
-            // MONITOR (SIMPLE V16 CONNECT)
+            // MONITOR
             startMonitor: (targetId, pin) => {
                 document.getElementById('btn-talk').classList.remove('hidden');
                 document.getElementById('btn-fit').classList.remove('hidden');
@@ -381,40 +378,40 @@
 
             connect: (targetId, pin) => {
                 const conn = app.peer.connect(targetId);
-                conn.on('open', () => { conn.send({auth: pin}); });
-                // Sem timeout agressivo, deixa o PeerJS tentar
+                conn.on('open', () => { ui.showReconnect(false); conn.send({auth: pin}); });
+                conn.on('close', () => { ui.showReconnect(true); setTimeout(()=>app.connect(targetId, pin), 3000); });
                 
                 app.peer.on('call', call => {
                     app.activeCall = call; call.answer();
                     call.on('stream', stream => {
                         document.getElementById('loader').classList.add('hidden');
+                        ui.showReconnect(false);
                         const v = document.getElementById('vid-main');
                         v.srcObject = stream; v.muted = false;
                         v.play().catch(() => { v.muted = true; v.play(); document.getElementById('btn-sound').classList.remove('hidden'); });
                         app.watchdogStart(v);
                     });
+                    call.on('close', () => ui.showReconnect(true));
                 });
             },
 
-            // UTILS (V16 WATCHDOG)
+            // WATCHDOG (5Hz CHECK - MUITO RÁPIDO)
             watchdogStart: (vid) => {
                 if(app.watchdog) clearInterval(app.watchdog);
                 let lastTime=0;
+                // Checa a cada 200ms (5x por segundo)
                 app.watchdog = setInterval(() => {
                     if(vid.paused || ui.mode!=='monitor') return;
-                    // Simples verificação de congelamento
-                    if(vid.currentTime===lastTime && vid.buffered.length>0) {
-                        vid.currentTime=vid.buffered.end(0);
+                    if(vid.currentTime===lastTime && !document.getElementById('reconnect-overlay').classList.contains('hidden')===false) {
+                        if(vid.buffered.length>0) vid.currentTime=vid.buffered.end(0);
                     }
                     lastTime=vid.currentTime;
-                    // Delay Killer suave
+                    // Se o delay passar de 0.2s (200ms), corrige imediatamente.
                     if(vid.buffered.length>0) {
                         const diff=vid.buffered.end(0)-vid.currentTime;
-                        if(diff>1.0) vid.currentTime=vid.buffered.end(0);
-                        else if(diff>0.3) vid.playbackRate=1.1;
-                        else vid.playbackRate=1.0;
+                        if(diff>0.2) vid.currentTime=vid.buffered.end(0);
                     }
-                }, 1000);
+                }, 200);
             },
             
             startTalk: async () => {
@@ -431,7 +428,8 @@
                 app.camIndex=(app.camIndex+1)%app.videoDevices.length;
                 app.localStream.getTracks().forEach(t=>t.stop());
                 try {
-                    app.localStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true}, video:{deviceId:{exact:app.videoDevices[app.camIndex].deviceId}}});
+                    // Mantém 15 FPS na troca
+                    app.localStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false}, video:{deviceId:{exact:app.videoDevices[app.camIndex].deviceId}, width:640, height:480, frameRate:15}});
                 } catch(e) { app.localStream = await navigator.mediaDevices.getUserMedia({audio:true, video:true}); }
                 document.getElementById('vid-main').srcObject=app.localStream;
                 Object.values(app.peer.connections).forEach(conns=>conns.forEach(c=>{
