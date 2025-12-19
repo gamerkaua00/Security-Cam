@@ -30,35 +30,36 @@
             width: 100%; height: 100%; 
             object-fit: contain; 
             transform: translateZ(0); /* Hardware Acceleration Trigger */
-            transition: filter 0.5s ease;
+            transition: filter 0.3s ease;
         }
         video.filled { object-fit: cover; }
         video.offline { opacity: 0.3; filter: grayscale(100%); } 
 
-        /* Night Vision Filter (Software Simulated Infrared) */
+        /* Night Vision Filter - IMPROVED */
         video.night-vision {
-            filter: brightness(250%) contrast(200%) grayscale(100%) sepia(30%) hue-rotate(90deg) !important;
+            /* Mais brilho, contraste extremo e tom verde tático */
+            filter: brightness(150%) contrast(300%) grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(300%) !important;
         }
 
         /* UI Elements */
         .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
         }
 
         .float-btn {
-            background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.2);
             backdrop-filter: blur(8px); border-radius: 50%; display: flex; align-items: center; justify-content: center;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: white; -webkit-tap-highlight-color: transparent;
         }
-        .float-btn:active { background: rgba(255,255,255,0.3); transform: scale(0.92); }
+        .float-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.92); }
 
         .talk-btn {
             position: absolute; bottom: 40px; right: 30px; z-index: 60;
             width: 72px; height: 72px; font-size: 24px;
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.4), rgba(29, 78, 216, 0.4));
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.6), rgba(29, 78, 216, 0.6));
             border: 2px solid rgba(96, 165, 250, 0.5);
             backdrop-filter: blur(5px); border-radius: 50%; display: flex; align-items: center; justify-content: center;
             box-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
@@ -115,7 +116,7 @@
                     <i class="fa-solid fa-shield-halved text-3xl text-blue-500"></i>
                 </div>
                 <h1 class="text-3xl font-black text-white tracking-tight">SECURICAM <span class="text-blue-500">PRO</span></h1>
-                <p class="text-[10px] text-slate-400 uppercase tracking-[0.2em] mt-2 font-bold">Low Latency • Auto Night Vision</p>
+                <p class="text-[10px] text-slate-400 uppercase tracking-[0.2em] mt-2 font-bold">Stable • Flashlight Support</p>
             </div>
 
             <div class="glass-panel p-1.5 rounded-xl flex mb-6">
@@ -159,7 +160,7 @@
             <div id="reconnect-overlay" class="absolute inset-0 bg-black/90 z-30 flex flex-col items-center justify-center backdrop-blur-md hidden">
                 <div class="loader-ring mb-4"></div>
                 <span class="text-blue-400 font-bold text-sm tracking-widest animate-pulse">RECONECTANDO...</span>
-                <p class="text-slate-500 text-xs mt-2 max-w-[200px] text-center">Sinal fraco ou troca de rede detectada.</p>
+                <p class="text-slate-500 text-xs mt-2 max-w-[200px] text-center">Tentando restabelecer comunicação.</p>
                 <button onclick="location.reload()" class="mt-8 px-6 py-2 border border-slate-700 text-slate-300 rounded-full text-xs hover:bg-slate-800">
                     REINICIAR APP
                 </button>
@@ -174,7 +175,7 @@
             <div id="badge-status" class="badge top-left hidden">
                 <div id="status-dot" class="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div> 
                 <span id="conn-status" class="text-slate-100 uppercase tracking-wide">ONLINE</span>
-                <i class="fa-solid fa-moon ml-2 nv-indicator animate-pulse"></i>
+                <i class="fa-solid fa-bolt ml-2 nv-indicator animate-pulse"></i>
             </div>
             
             <!-- CONTROLS -->
@@ -183,6 +184,11 @@
             <button id="btn-stealth" onclick="ui.toggleStealth()" class="float-btn w-12 h-12 absolute top-20 right-5 z-50 hidden bg-black/40 border-slate-700 text-slate-400" title="Modo Espião (Tela Preta)">
                 <i class="fa-solid fa-ghost"></i>
             </button>
+            
+            <!-- Botão Flash Manual (Camera) -->
+            <button id="btn-torch-cam" onclick="nightVision.toggleTorch()" class="float-btn w-12 h-12 absolute top-36 right-5 z-50 hidden bg-black/40 border-slate-700 text-yellow-400" title="Lanterna">
+                <i class="fa-solid fa-lightbulb"></i>
+            </button>
 
             <!-- Monitor Specific -->
             <button id="btn-fit" onclick="ui.toggleFit()" class="float-btn w-10 h-10 absolute top-20 right-5 z-50 hidden">
@@ -190,7 +196,7 @@
             </button>
             
             <button id="btn-night" onclick="nightVision.toggleManual()" class="float-btn w-10 h-10 absolute top-32 right-5 z-50 hidden text-green-400 border-green-900/50">
-                <i class="fa-solid fa-lightbulb"></i>
+                <i class="fa-solid fa-eye"></i>
             </button>
 
             <button id="btn-talk" class="talk-btn hidden" onmousedown="app.startTalk()" onmouseup="app.stopTalk()" ontouchstart="app.startTalk()" ontouchend="app.stopTalk()">
@@ -234,12 +240,13 @@
 
     <script>
         // === ADVANCED CONFIG ===
-        // Configuração ICE Padrão Google (Mais estável para WiFi comum)
         const ICE_SERVERS = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
             ],
             sdpSemantics: 'unified-plan'
         };
@@ -251,7 +258,7 @@
 
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-        // === NIGHT VISION LOGIC (AUTO GAIN) ===
+        // === NIGHT VISION & TORCH LOGIC ===
         const nightVision = {
             active: false,
             manualOverride: false,
@@ -259,17 +266,56 @@
             canvas: document.getElementById('cv-analysis'),
             video: document.getElementById('vid-main'),
             ctx: document.getElementById('cv-analysis').getContext('2d', { willReadFrequently: true }),
+            hasTorch: false,
             
             start: () => {
                 if (nightVision.interval) clearInterval(nightVision.interval);
-                // Checa a cada 1.5s para não drenar bateria
-                nightVision.interval = setInterval(nightVision.checkBrightness, 1500);
+                // Checa a cada 2s para não drenar bateria
+                nightVision.interval = setInterval(nightVision.checkBrightness, 2000);
+                nightVision.checkTorchSupport();
             },
             
             stop: () => {
                 if (nightVision.interval) clearInterval(nightVision.interval);
+                nightVision.setTorch(false);
                 nightVision.video.classList.remove('night-vision');
                 document.getElementById('badge-status').classList.remove('nv-active');
+            },
+
+            checkTorchSupport: () => {
+                if(!app.localStream) return;
+                const track = app.localStream.getVideoTracks()[0];
+                try {
+                    const capabilities = track.getCapabilities();
+                    if(capabilities.torch) {
+                        nightVision.hasTorch = true;
+                        document.getElementById('btn-torch-cam').classList.remove('hidden');
+                    }
+                } catch(e) {}
+            },
+
+            setTorch: (on) => {
+                if(!nightVision.hasTorch || !app.localStream) return;
+                const track = app.localStream.getVideoTracks()[0];
+                track.applyConstraints({ advanced: [{ torch: on }] }).catch(e => console.log("Erro lanterna", e));
+            },
+            
+            toggleTorch: () => {
+                // Manual toggle apenas para camera
+                if(ui.mode !== 'camera') return;
+                const btn = document.getElementById('btn-torch-cam');
+                // Check state hack
+                const isOn = btn.classList.contains('text-white'); // Se branco, ta ligado
+                
+                if(!isOn) {
+                    nightVision.setTorch(true);
+                    btn.classList.remove('text-yellow-400');
+                    btn.classList.add('text-white', 'bg-yellow-600');
+                } else {
+                    nightVision.setTorch(false);
+                    btn.classList.remove('text-white', 'bg-yellow-600');
+                    btn.classList.add('text-yellow-400');
+                }
             },
 
             toggleManual: () => {
@@ -277,53 +323,50 @@
                 const v = document.getElementById('vid-main');
                 if(nightVision.manualOverride) {
                     v.classList.add('night-vision');
-                    ui.log("Visão Noturna Manual: ATIVADA");
+                    ui.log("Filtro Noturno: ATIVADO");
                 } else {
                     v.classList.remove('night-vision');
-                    ui.log("Visão Noturna Manual: DESATIVADA");
+                    ui.log("Filtro Noturno: DESATIVADO");
                 }
             },
 
             checkBrightness: () => {
-                if (nightVision.manualOverride || ui.mode !== 'camera') return; // Apenas a câmera processa isso
+                if (nightVision.manualOverride || ui.mode !== 'camera') return;
 
                 const { video, canvas, ctx } = nightVision;
                 if (video.readyState < 2) return;
 
-                // Reduzir resolução para performance (50x50 pixels é suficiente para média)
-                canvas.width = 50;
-                canvas.height = 50;
-                ctx.drawImage(video, 0, 0, 50, 50);
+                // Reduzir resolução para performance
+                canvas.width = 40;
+                canvas.height = 40;
+                ctx.drawImage(video, 0, 0, 40, 40);
 
                 try {
-                    const frame = ctx.getImageData(0, 0, 50, 50);
+                    const frame = ctx.getImageData(0, 0, 40, 40);
                     const data = frame.data;
-                    let r, g, b, avg;
                     let colorSum = 0;
 
                     for (let x = 0, len = data.length; x < len; x += 4) {
-                        r = data[x];
-                        g = data[x + 1];
-                        b = data[x + 2];
-                        avg = Math.floor((r + g + b) / 3);
+                        const avg = (data[x] + data[x + 1] + data[x + 2]) / 3;
                         colorSum += avg;
                     }
 
-                    const brightness = Math.floor(colorSum / (50 * 50));
+                    const brightness = Math.floor(colorSum / (40 * 40));
 
-                    // Threshold: Se brilho médio < 35 (Muito escuro)
-                    if (brightness < 35 && !nightVision.active) {
+                    // Threshold Ajustado: < 40 ativa
+                    if (brightness < 40 && !nightVision.active) {
                         nightVision.active = true;
                         video.classList.add('night-vision');
                         document.getElementById('badge-status').classList.add('nv-active');
-                    } else if (brightness > 45 && nightVision.active) {
+                        // Tenta ligar o flash automaticamente se estiver muito escuro
+                        if(brightness < 15) nightVision.setTorch(true);
+                    } else if (brightness > 60 && nightVision.active) {
                         nightVision.active = false;
                         video.classList.remove('night-vision');
                         document.getElementById('badge-status').classList.remove('nv-active');
+                        nightVision.setTorch(false);
                     }
-                } catch(e) {
-                    // Ignora erros de contexto (ex: tela preta)
-                }
+                } catch(e) {}
             }
         };
 
@@ -375,11 +418,9 @@
                 const dot = document.getElementById('status-dot');
                 const txt = document.getElementById('conn-status');
                 
-                // Limpa timer anterior se existir
                 if (app.disconnectTimer) clearTimeout(app.disconnectTimer);
 
                 if(show) { 
-                    // Se for mostrar, mostra imediatamente (a lógica de delay agora é no listener)
                     el.classList.remove('hidden'); 
                     v.classList.add('offline'); 
                     dot.classList.remove('bg-green-500', 'animate-pulse'); dot.classList.add('bg-red-500');
@@ -426,7 +467,7 @@
         // === APP LOGIC ===
         const app = {
             peer: null, localStream: null, micStream: null, activeCall: null,
-            viewersSet: new Set(), // Usando Set para IDs únicos
+            viewersSet: new Set(),
             currentFacing: 'environment', connectionCheck: null,
             retryTimeout: null, disconnectTimer: null,
 
@@ -474,7 +515,7 @@
                 document.getElementById('loader').classList.remove('hidden');
                 document.getElementById('stealth-layer').style.display = 'none';
                 
-                ['btn-talk','btn-swap','btn-sound','btn-fit','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay', 'btn-night'].forEach(i => {
+                ['btn-talk','btn-swap','btn-sound','btn-fit','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay', 'btn-night', 'btn-torch-cam'].forEach(i => {
                     const el = document.getElementById(i);
                     if(el) el.classList.add('hidden');
                 });
@@ -488,25 +529,24 @@
                 document.getElementById('btn-stealth').classList.remove('hidden');
                 document.getElementById('loader-txt').innerText = "INICIANDO HARDWARE...";
 
-                // Configurações de Câmera Otimizadas para iOS Safari
+                // Configurações Simplificadas (Maior compatibilidade Android/iPhone)
                 let constraints = { 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    audio: { echoCancellation: true, noiseSuppression: true },
                     video: { 
-                        facingMode: app.currentFacing,
-                        width: { ideal: 640 }, // Baixa resolução = Menor latência em 4G
-                        height: { ideal: 480 },
-                        frameRate: { ideal: 20, max: 30 }
+                        facingMode: app.currentFacing
+                        // Removido width/height/frameRate ideais forçados para evitar erro "OverconstrainedError" no Android
                     }
                 };
 
                 try {
                     app.localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 } catch(err1) {
-                    console.warn("Camera fallback triggered");
+                    console.warn("Fallback to basic constraints", err1);
                     try {
+                        // Tentativa mais genérica possível
                         app.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                     } catch(err2) {
-                        alert("Erro: Câmera negada ou indisponível.");
+                        alert("Erro Fatal: Câmera não acessível. Verifique permissões.");
                         app.stop(); return;
                     }
                 }
@@ -516,9 +556,7 @@
                 v.muted = true; 
                 if(isMobile) document.getElementById('btn-swap').classList.remove('hidden');
 
-                // Iniciar lógica de visão noturna automática
                 nightVision.start();
-
                 document.getElementById('loader-txt').innerText = "CONECTANDO À REDE...";
                 app.initPeer(myId, pin);
             },
@@ -526,28 +564,32 @@
             initPeer: (myId, pin) => {
                 if(app.peer) app.peer.destroy();
 
+                // ID FIXO para a câmera é necessário para o monitor encontrar
                 app.peer = new Peer(myId, { debug: 1, config: ICE_SERVERS });
                 
                 app.peer.on('open', () => { 
                     document.getElementById('loader').classList.add('hidden'); 
                     document.getElementById('badge-status').classList.remove('hidden');
-                    // Heartbeat para manter conexão ativa no Safari
+                    
                     app.connectionCheck = setInterval(() => {
                         if(app.peer && !app.peer.disconnected) {
                             app.peer.socket.send({type: 'heartbeat'});
                         }
-                    }, 5000);
+                    }, 4000);
                 });
                 
                 app.peer.on('error', e => {
-                    if(e.type==='unavailable-id') { alert("Este ID já está em uso!"); app.stop(); }
+                    if(e.type==='unavailable-id') { 
+                        // SE O ID ESTIVER PRESO: Tenta limpar sessão antiga
+                        // Como não podemos "forçar", avisamos o usuário para esperar 30s ou reiniciar o app
+                        alert("ID em uso! Uma sessão anterior ainda está ativa.\nAguarde 1 minuto ou mude o ID.");
+                        app.stop();
+                    }
                     else if (e.type === 'peer-unavailable') { ui.log("Peer não encontrado"); }
                     else if (e.type === 'network' || e.type === 'disconnected' || e.type === 'server-error') { 
-                         // Falha silenciosa de rede (tenta reconectar em background sem assustar o user)
-                         console.log("Rede instável, tentando reconectar...", e.type);
+                         ui.log("Reconectando...");
                          setTimeout(() => { if(app.peer) app.peer.reconnect(); }, 2000); 
                     }
-                    console.error(e);
                 });
 
                 app.peer.on('connection', conn => {
@@ -561,9 +603,10 @@
                             const call = app.peer.call(conn.peer, app.localStream);
                             const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
                             if(sender) {
+                                // Limite de banda suave para 4G
                                 const params = sender.getParameters();
                                 if(!params.encodings) params.encodings = [{}];
-                                params.encodings[0].maxBitrate = 400000;
+                                params.encodings[0].maxBitrate = 500000;
                                 sender.setParameters(params).catch(e => console.log(e));
                             }
 
@@ -611,25 +654,21 @@
                 
                 if(app.peer) app.peer.destroy();
 
+                // Monitor usa ID aleatório para evitar conflito
                 app.peer = new Peer(null, { debug: 1, config: ICE_SERVERS });
                 
                 app.retryTimeout = setTimeout(() => {
                     if(!app.activeCall) {
-                        ui.log("Ainda tentando conectar...");
+                        ui.log("Sem resposta. Tentando novamente...");
                         app.startMonitor(targetId, pin);
                     }
-                }, 15000); // Aumentado para 15s para dar chance ao WiFi lento
+                }, 12000);
 
                 app.peer.on('open', () => app.connectToCamera(targetId, pin));
                 
                 app.peer.on('error', e => { 
                     console.log("Monitor Error:", e.type);
-                    // Não mostra erro visual imediatamente, apenas retenta
                     setTimeout(() => app.startMonitor(targetId, pin), 3000); 
-                });
-                
-                app.peer.on('disconnected', () => {
-                    app.peer.reconnect();
                 });
             },
 
@@ -643,15 +682,13 @@
                 });
                 
                 conn.on('close', () => { 
-                   // Delay antes de mostrar erro
                    app.disconnectTimer = setTimeout(() => {
                         ui.showReconnect(true); 
                         setTimeout(() => app.connectToCamera(targetId, pin), 2000);
-                   }, 3000);
+                   }, 4000);
                 });
 
                 conn.on('error', (err) => {
-                    console.log("Conn Error:", err);
                     setTimeout(() => app.connectToCamera(targetId, pin), 2000);
                 });
 
@@ -664,35 +701,31 @@
                         ui.showReconnect(false);
                         const v = document.getElementById('vid-main');
                         v.srcObject = stream; 
-                        v.muted = false;
+                        v.muted = false; // Importante para ouvir áudio da câmera
                         
-                        const playPromise = v.play();
-                        if (playPromise !== undefined) {
-                            playPromise.catch(error => {
-                                v.muted = true; v.play();
-                                document.getElementById('btn-sound').classList.remove('hidden');
-                            });
-                        }
+                        // iPhone Fix: Forçar play
+                        v.play().catch(error => {
+                            console.warn("Auto-play blocked", error);
+                            v.muted = true; // Fallback para mudo se falhar
+                            v.play();
+                            document.getElementById('btn-sound').classList.remove('hidden');
+                        });
                     });
 
                     call.on('close', () => {
                         app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 3000);
                     });
                     
-                    // Monitoramento Vital de Conexão com Tolerância (Debounce)
                     call.peerConnection.oniceconnectionstatechange = () => {
                         const state = call.peerConnection.iceConnectionState;
-                        console.log("ICE State:", state);
-                        
                         if (state === 'disconnected') {
-                            // Espera 4s antes de declarar morte (comum em WiFi instável)
-                            app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 4000);
+                            app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 5000);
                         } else if (state === 'connected' || state === 'completed') {
                             if(app.disconnectTimer) clearTimeout(app.disconnectTimer);
                             ui.showReconnect(false);
                         } else if (state === 'failed') {
                             ui.showReconnect(true);
-                            call.close();
+                            call.close(); // Força reinício
                         }
                     };
                 });
@@ -704,7 +737,7 @@
                 try { 
                     app.micStream = await navigator.mediaDevices.getUserMedia({audio:true}); 
                     app.peer.call(app.activeCall.peer, app.micStream); 
-                } catch(e){ alert("Microfone bloqueado pelo sistema."); }
+                } catch(e){ alert("Microfone bloqueado."); }
             },
             stopTalk: () => {
                 document.getElementById('btn-talk').classList.remove('talking');
@@ -714,13 +747,13 @@
             swapCam: async () => {
                 if(!app.localStream) return;
                 app.currentFacing = (app.currentFacing === 'environment') ? 'user' : 'environment';
-                
                 app.localStream.getVideoTracks().forEach(track => track.stop());
                 
                 try {
+                    // Sem constraints rígidas no swap também
                     const newStream = await navigator.mediaDevices.getUserMedia({
                         audio: { echoCancellation: true },
-                        video: { facingMode: app.currentFacing, width: 640, height: 480 }
+                        video: { facingMode: app.currentFacing }
                     });
                     
                     const videoTrack = newStream.getVideoTracks()[0];
@@ -731,15 +764,16 @@
                     document.getElementById('vid-main').srcObject = newStream;
                     app.localStream = newStream;
 
+                    // Reaplicar flash se necessário
+                    if(nightVision.active) nightVision.checkTorchSupport();
+
                     Object.values(app.peer.connections).forEach(conns => {
                         conns.forEach(c => {
                             const sender = c.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
                             if(sender) sender.replaceTrack(videoTrack);
                         })
                     });
-                } catch(e) {
-                    console.error("Erro ao trocar câmera", e);
-                }
+                } catch(e) { console.error(e); }
             }
         };
     </script>
