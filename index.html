@@ -234,11 +234,12 @@
 
     <script>
         // === ADVANCED CONFIG ===
-        // Configuração ICE simplificada e robusta para 4G/5G
+        // Configuração ICE Padrão Google (Mais estável para WiFi comum)
         const ICE_SERVERS = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' } // Twilio é muito estável em mobile
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
             ],
             sdpSemantics: 'unified-plan'
         };
@@ -374,7 +375,11 @@
                 const dot = document.getElementById('status-dot');
                 const txt = document.getElementById('conn-status');
                 
+                // Limpa timer anterior se existir
+                if (app.disconnectTimer) clearTimeout(app.disconnectTimer);
+
                 if(show) { 
+                    // Se for mostrar, mostra imediatamente (a lógica de delay agora é no listener)
                     el.classList.remove('hidden'); 
                     v.classList.add('offline'); 
                     dot.classList.remove('bg-green-500', 'animate-pulse'); dot.classList.add('bg-red-500');
@@ -423,7 +428,7 @@
             peer: null, localStream: null, micStream: null, activeCall: null,
             viewersSet: new Set(), // Usando Set para IDs únicos
             currentFacing: 'environment', connectionCheck: null,
-            retryTimeout: null,
+            retryTimeout: null, disconnectTimer: null,
 
             saveAndStart: (e) => {
                 e.preventDefault();
@@ -454,6 +459,7 @@
                 nightVision.stop();
                 if(app.connectionCheck) clearInterval(app.connectionCheck);
                 if(app.retryTimeout) clearTimeout(app.retryTimeout);
+                if(app.disconnectTimer) clearTimeout(app.disconnectTimer);
                 
                 if(app.localStream) { app.localStream.getTracks().forEach(t=>t.stop()); app.localStream=null; }
                 if(app.micStream) { app.micStream.getTracks().forEach(t=>t.stop()); app.micStream=null; }
@@ -518,7 +524,6 @@
             },
 
             initPeer: (myId, pin) => {
-                // Força destruição anterior se existir
                 if(app.peer) app.peer.destroy();
 
                 app.peer = new Peer(myId, { debug: 1, config: ICE_SERVERS });
@@ -537,9 +542,10 @@
                 app.peer.on('error', e => {
                     if(e.type==='unavailable-id') { alert("Este ID já está em uso!"); app.stop(); }
                     else if (e.type === 'peer-unavailable') { ui.log("Peer não encontrado"); }
-                    else if (e.type === 'network' || e.type === 'disconnected') { 
-                         ui.log("Rede instável..."); 
-                         setTimeout(() => app.peer.reconnect(), 2000); 
+                    else if (e.type === 'network' || e.type === 'disconnected' || e.type === 'server-error') { 
+                         // Falha silenciosa de rede (tenta reconectar em background sem assustar o user)
+                         console.log("Rede instável, tentando reconectar...", e.type);
+                         setTimeout(() => { if(app.peer) app.peer.reconnect(); }, 2000); 
                     }
                     console.error(e);
                 });
@@ -547,21 +553,17 @@
                 app.peer.on('connection', conn => {
                     conn.on('data', data => {
                         if (data.auth === pin) {
-                            // Correção da Contagem: Verifica ID único do Peer
                             if (!app.viewersSet.has(conn.peer)) {
                                 app.viewersSet.add(conn.peer);
                                 app.updateViewerCount();
                             }
                             
-                            // Call Logic
                             const call = app.peer.call(conn.peer, app.localStream);
-                            
-                            // Otimização de Bandwidth para 4G
                             const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
                             if(sender) {
                                 const params = sender.getParameters();
                                 if(!params.encodings) params.encodings = [{}];
-                                params.encodings[0].maxBitrate = 400000; // Limitando a 400kbps para estabilidade
+                                params.encodings[0].maxBitrate = 400000;
                                 sender.setParameters(params).catch(e => console.log(e));
                             }
 
@@ -570,7 +572,6 @@
                                 app.updateViewerCount();
                             });
                             
-                            // Tratamento agressivo de desconexão no Safari
                             conn.peerConnection.oniceconnectionstatechange = () => {
                                 if(conn.peerConnection.iceConnectionState === 'disconnected') {
                                     app.viewersSet.delete(conn.peer);
@@ -578,7 +579,7 @@
                                 }
                             };
                         } else {
-                            conn.close(); // Senha errada
+                            conn.close();
                         }
                     });
                 });
@@ -595,7 +596,6 @@
             updateViewerCount: () => {
                 const count = app.viewersSet.size;
                 document.getElementById('viewer-count').innerText = count;
-                // Efeito visual quando alguém entra
                 const badge = document.getElementById('badge-viewers');
                 badge.classList.add('scale-110', 'text-blue-300');
                 setTimeout(() => badge.classList.remove('scale-110', 'text-blue-300'), 200);
@@ -609,36 +609,31 @@
                 document.getElementById('badge-status').classList.remove('hidden');
                 document.getElementById('loader-txt').innerText = "BUSCANDO SINAL...";
                 
-                // Força destruição anterior
                 if(app.peer) app.peer.destroy();
 
                 app.peer = new Peer(null, { debug: 1, config: ICE_SERVERS });
                 
-                // Timeout de Segurança: Se não conectar no Broker em 10s, reinicia
                 app.retryTimeout = setTimeout(() => {
                     if(!app.activeCall) {
-                        ui.log("Sinal fraco, reiniciando...");
+                        ui.log("Ainda tentando conectar...");
                         app.startMonitor(targetId, pin);
                     }
-                }, 10000);
+                }, 15000); // Aumentado para 15s para dar chance ao WiFi lento
 
                 app.peer.on('open', () => app.connectToCamera(targetId, pin));
                 
                 app.peer.on('error', e => { 
                     console.log("Monitor Error:", e.type);
-                    ui.log("Erro: " + e.type);
-                    // Retry rápido
-                    setTimeout(() => app.startMonitor(targetId, pin), 2000); 
+                    // Não mostra erro visual imediatamente, apenas retenta
+                    setTimeout(() => app.startMonitor(targetId, pin), 3000); 
                 });
                 
-                // Reconexão automática se o Peer cair
                 app.peer.on('disconnected', () => {
                     app.peer.reconnect();
                 });
             },
 
             connectToCamera: (targetId, pin) => {
-                // Removido {reliable: true} para melhorar compatibilidade 4G (usa UDP se possível)
                 const conn = app.peer.connect(targetId, { serialization: 'json' });
                 
                 conn.on('open', () => { 
@@ -648,12 +643,13 @@
                 });
                 
                 conn.on('close', () => { 
-                    ui.showReconnect(true); 
-                    // Tenta reconectar agressivamente
-                    setTimeout(() => app.connectToCamera(targetId, pin), 2000); 
+                   // Delay antes de mostrar erro
+                   app.disconnectTimer = setTimeout(() => {
+                        ui.showReconnect(true); 
+                        setTimeout(() => app.connectToCamera(targetId, pin), 2000);
+                   }, 3000);
                 });
 
-                // Error handling na conexão de dados
                 conn.on('error', (err) => {
                     console.log("Conn Error:", err);
                     setTimeout(() => app.connectToCamera(targetId, pin), 2000);
@@ -670,7 +666,6 @@
                         v.srcObject = stream; 
                         v.muted = false;
                         
-                        // Promise play handling para navegadores modernos
                         const playPromise = v.play();
                         if (playPromise !== undefined) {
                             playPromise.catch(error => {
@@ -680,17 +675,24 @@
                         }
                     });
 
-                    call.on('close', () => ui.showReconnect(true));
+                    call.on('close', () => {
+                        app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 3000);
+                    });
                     
-                    // Monitoramento Vital de Conexão (Watchdog para 4G)
+                    // Monitoramento Vital de Conexão com Tolerância (Debounce)
                     call.peerConnection.oniceconnectionstatechange = () => {
                         const state = call.peerConnection.iceConnectionState;
-                        if (state === 'disconnected' || state === 'failed') {
-                            ui.showReconnect(true);
-                            // Força renegociação ICE
-                            if(state === 'failed') call.close();
-                        } else if (state === 'connected') {
+                        console.log("ICE State:", state);
+                        
+                        if (state === 'disconnected') {
+                            // Espera 4s antes de declarar morte (comum em WiFi instável)
+                            app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 4000);
+                        } else if (state === 'connected' || state === 'completed') {
+                            if(app.disconnectTimer) clearTimeout(app.disconnectTimer);
                             ui.showReconnect(false);
+                        } else if (state === 'failed') {
+                            ui.showReconnect(true);
+                            call.close();
                         }
                     };
                 });
@@ -713,7 +715,6 @@
                 if(!app.localStream) return;
                 app.currentFacing = (app.currentFacing === 'environment') ? 'user' : 'environment';
                 
-                // Parar tracks antigos corretamente
                 app.localStream.getVideoTracks().forEach(track => track.stop());
                 
                 try {
@@ -722,16 +723,14 @@
                         video: { facingMode: app.currentFacing, width: 640, height: 480 }
                     });
                     
-                    // Substituir track no stream local
                     const videoTrack = newStream.getVideoTracks()[0];
                     const oldVideoTrack = app.localStream.getVideoTracks()[0];
                     app.localStream.removeTrack(oldVideoTrack);
                     app.localStream.addTrack(videoTrack);
                     
                     document.getElementById('vid-main').srcObject = newStream;
-                    app.localStream = newStream; // Atualiza referência global
+                    app.localStream = newStream;
 
-                    // Substituir track em TODAS as conexões ativas (Sem derrubar)
                     Object.values(app.peer.connections).forEach(conns => {
                         conns.forEach(c => {
                             const sender = c.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
