@@ -234,16 +234,13 @@
 
     <script>
         // === ADVANCED CONFIG ===
-        // Usando múltiplos servidores STUN para garantir melhor conectividade em 4G
+        // Configuração ICE simplificada e robusta para 4G/5G
         const ICE_SERVERS = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' }
+                { urls: 'stun:global.stun.twilio.com:3478' } // Twilio é muito estável em mobile
             ],
-            iceCandidatePoolSize: 10 // Prepara candidatos antes da conexão para agilizar
+            sdpSemantics: 'unified-plan'
         };
         const PREFIX = "sc30pro-secure-";
 
@@ -426,6 +423,7 @@
             peer: null, localStream: null, micStream: null, activeCall: null,
             viewersSet: new Set(), // Usando Set para IDs únicos
             currentFacing: 'environment', connectionCheck: null,
+            retryTimeout: null,
 
             saveAndStart: (e) => {
                 e.preventDefault();
@@ -455,6 +453,8 @@
             stop: () => {
                 nightVision.stop();
                 if(app.connectionCheck) clearInterval(app.connectionCheck);
+                if(app.retryTimeout) clearTimeout(app.retryTimeout);
+                
                 if(app.localStream) { app.localStream.getTracks().forEach(t=>t.stop()); app.localStream=null; }
                 if(app.micStream) { app.micStream.getTracks().forEach(t=>t.stop()); app.micStream=null; }
                 if(app.peer) { app.peer.destroy(); app.peer=null; }
@@ -518,6 +518,9 @@
             },
 
             initPeer: (myId, pin) => {
+                // Força destruição anterior se existir
+                if(app.peer) app.peer.destroy();
+
                 app.peer = new Peer(myId, { debug: 1, config: ICE_SERVERS });
                 
                 app.peer.on('open', () => { 
@@ -606,12 +609,26 @@
                 document.getElementById('badge-status').classList.remove('hidden');
                 document.getElementById('loader-txt').innerText = "BUSCANDO SINAL...";
                 
+                // Força destruição anterior
+                if(app.peer) app.peer.destroy();
+
                 app.peer = new Peer(null, { debug: 1, config: ICE_SERVERS });
                 
+                // Timeout de Segurança: Se não conectar no Broker em 10s, reinicia
+                app.retryTimeout = setTimeout(() => {
+                    if(!app.activeCall) {
+                        ui.log("Sinal fraco, reiniciando...");
+                        app.startMonitor(targetId, pin);
+                    }
+                }, 10000);
+
                 app.peer.on('open', () => app.connectToCamera(targetId, pin));
+                
                 app.peer.on('error', e => { 
-                    ui.log("Tentando reconectar..."); 
-                    setTimeout(() => app.connectToCamera(targetId, pin), 3000); 
+                    console.log("Monitor Error:", e.type);
+                    ui.log("Erro: " + e.type);
+                    // Retry rápido
+                    setTimeout(() => app.startMonitor(targetId, pin), 2000); 
                 });
                 
                 // Reconexão automática se o Peer cair
@@ -621,9 +638,11 @@
             },
 
             connectToCamera: (targetId, pin) => {
-                const conn = app.peer.connect(targetId, { reliable: true });
+                // Removido {reliable: true} para melhorar compatibilidade 4G (usa UDP se possível)
+                const conn = app.peer.connect(targetId, { serialization: 'json' });
                 
                 conn.on('open', () => { 
+                    if(app.retryTimeout) clearTimeout(app.retryTimeout);
                     ui.showReconnect(false); 
                     conn.send({auth: pin}); 
                 });
@@ -632,6 +651,12 @@
                     ui.showReconnect(true); 
                     // Tenta reconectar agressivamente
                     setTimeout(() => app.connectToCamera(targetId, pin), 2000); 
+                });
+
+                // Error handling na conexão de dados
+                conn.on('error', (err) => {
+                    console.log("Conn Error:", err);
+                    setTimeout(() => app.connectToCamera(targetId, pin), 2000);
                 });
 
                 app.peer.on('call', call => {
