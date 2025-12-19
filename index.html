@@ -30,16 +30,9 @@
             width: 100%; height: 100%; 
             object-fit: contain; 
             transform: translateZ(0); /* Hardware Acceleration Trigger */
-            transition: filter 0.3s ease;
         }
         video.filled { object-fit: cover; }
         video.offline { opacity: 0.3; filter: grayscale(100%); } 
-
-        /* Night Vision Filter - IMPROVED */
-        video.night-vision {
-            /* Mais brilho, contraste extremo e tom verde tático */
-            filter: brightness(150%) contrast(300%) grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(300%) !important;
-        }
 
         /* UI Elements */
         .glass-panel {
@@ -79,13 +72,6 @@
         }
         .top-left { top: 20px; left: 20px; }
         .top-right { top: 20px; right: 20px; }
-
-        /* Mode Indicator for Night Vision */
-        .nv-indicator {
-            color: #4ade80; text-shadow: 0 0 10px #4ade80;
-            display: none;
-        }
-        .nv-active .nv-indicator { display: block; }
         
         /* Loading Animation */
         .loader-ring {
@@ -116,7 +102,7 @@
                     <i class="fa-solid fa-shield-halved text-3xl text-blue-500"></i>
                 </div>
                 <h1 class="text-3xl font-black text-white tracking-tight">SECURICAM <span class="text-blue-500">PRO</span></h1>
-                <p class="text-[10px] text-slate-400 uppercase tracking-[0.2em] mt-2 font-bold">Stable • Flashlight Support</p>
+                <p class="text-[10px] text-slate-400 uppercase tracking-[0.2em] mt-2 font-bold">Fast Connect • Lite</p>
             </div>
 
             <div class="glass-panel p-1.5 rounded-xl flex mb-6">
@@ -150,20 +136,17 @@
             <!-- Main Video -->
             <video id="vid-main" autoplay playsinline webkit-playsinline muted></video>
             
-            <!-- Hidden Canvas for Night Vision Analysis -->
-            <canvas id="cv-analysis" class="hidden"></canvas>
-            
-            <!-- Audio Intercom -->
-            <audio id="audio-intercom" autoplay></audio>
+            <!-- Audio Intercom (Hidden) -->
+            <audio id="audio-intercom" autoplay playsinline></audio>
 
             <!-- Disconnect Overlay -->
             <div id="reconnect-overlay" class="absolute inset-0 bg-black/90 z-30 flex flex-col items-center justify-center backdrop-blur-md hidden">
                 <div class="loader-ring mb-4"></div>
-                <span class="text-blue-400 font-bold text-sm tracking-widest animate-pulse">AGUARDANDO...</span>
-                <p class="text-slate-500 text-xs mt-2 max-w-[200px] text-center">Sincronizando vídeo.</p>
+                <span class="text-blue-400 font-bold text-sm tracking-widest animate-pulse">BUSCANDO SINAL...</span>
+                <p class="text-slate-500 text-xs mt-2 max-w-[200px] text-center">Tentando reconectar.</p>
                 <!-- Botão de emergência -->
                 <button onclick="ui.forceReload()" class="mt-8 px-6 py-2 border border-slate-700 text-slate-300 rounded-full text-xs hover:bg-slate-800">
-                    REINICIAR VÍDEO
+                    REINICIAR TUDO
                 </button>
             </div>
 
@@ -176,7 +159,6 @@
             <div id="badge-status" class="badge top-left hidden">
                 <div id="status-dot" class="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div> 
                 <span id="conn-status" class="text-slate-100 uppercase tracking-wide">ONLINE</span>
-                <i class="fa-solid fa-bolt ml-2 nv-indicator animate-pulse"></i>
             </div>
             
             <!-- CONTROLS -->
@@ -186,27 +168,18 @@
                 <i class="fa-solid fa-ghost"></i>
             </button>
             
-            <!-- Botão Flash Manual (Camera) -->
-            <button id="btn-torch-cam" onclick="nightVision.toggleTorch()" class="float-btn w-12 h-12 absolute top-36 right-5 z-50 hidden bg-black/40 border-slate-700 text-yellow-400" title="Lanterna">
-                <i class="fa-solid fa-lightbulb"></i>
-            </button>
-
             <!-- Monitor Specific -->
             <button id="btn-fit" onclick="ui.toggleFit()" class="float-btn w-10 h-10 absolute top-20 right-5 z-50 hidden">
                 <i class="fa-solid fa-expand" id="icon-fit"></i>
             </button>
             
-            <button id="btn-night" onclick="nightVision.toggleManual()" class="float-btn w-10 h-10 absolute top-32 right-5 z-50 hidden text-green-400 border-green-900/50">
-                <i class="fa-solid fa-eye"></i>
-            </button>
-
             <button id="btn-talk" class="talk-btn hidden" onmousedown="app.startTalk()" onmouseup="app.stopTalk()" ontouchstart="app.startTalk()" ontouchend="app.stopTalk()">
                 <i class="fa-solid fa-microphone"></i>
             </button>
 
-            <!-- Unlock Audio Button (Browser Policy) -->
+            <!-- Unlock Audio Button -->
             <button id="btn-sound" onclick="ui.unlockAudio()" class="absolute z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-full font-bold hidden shadow-xl animate-bounce text-sm">
-                <i class="fa-solid fa-volume-high mr-2"></i> ATIVAR SOM
+                <i class="fa-solid fa-volume-high mr-2"></i> TOCAR ÁUDIO
             </button>
 
             <!-- Exit Button -->
@@ -227,7 +200,7 @@
         <!-- Loader -->
         <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#020617] z-20">
             <div class="loader-ring mb-6"></div>
-            <span id="loader-txt" class="text-xs font-mono text-blue-300/50 tracking-[0.2em] font-bold animate-pulse">INICIALIZANDO SISTEMA...</span>
+            <span id="loader-txt" class="text-xs font-mono text-blue-300/50 tracking-[0.2em] font-bold animate-pulse">CARREGANDO...</span>
         </div>
     </div>
 
@@ -240,128 +213,22 @@
     </audio>
 
     <script>
-        // === ADVANCED CONFIG ===
+        // === CONFIG SIMPLIFICADA E RÁPIDA ===
         const ICE_SERVERS = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun.cloudflare.com:3478' } // Backup STUN robusto
-            ],
-            sdpSemantics: 'unified-plan'
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ]
+            // Removido sdpSemantics para compatibilidade padrão
         };
-        const PREFIX = "sc30pro-secure-";
+        const PREFIX = "sc30pro-lite-";
 
         // PWA Configuration
         const m = { "name": "SecuriCam Pro", "display": "standalone", "background_color": "#000000", "theme_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
         document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(new Blob([JSON.stringify(m)], {type: 'application/json'})));
 
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-        // === NIGHT VISION & TORCH LOGIC ===
-        const nightVision = {
-            active: false,
-            manualOverride: false,
-            interval: null,
-            canvas: document.getElementById('cv-analysis'),
-            video: document.getElementById('vid-main'),
-            ctx: document.getElementById('cv-analysis').getContext('2d', { willReadFrequently: true }),
-            hasTorch: false,
-            
-            start: () => {
-                if (nightVision.interval) clearInterval(nightVision.interval);
-                nightVision.interval = setInterval(nightVision.checkBrightness, 2000);
-                nightVision.checkTorchSupport();
-            },
-            
-            stop: () => {
-                if (nightVision.interval) clearInterval(nightVision.interval);
-                nightVision.setTorch(false);
-                nightVision.video.classList.remove('night-vision');
-                document.getElementById('badge-status').classList.remove('nv-active');
-            },
-
-            checkTorchSupport: () => {
-                if(!app.localStream) return;
-                try {
-                    const track = app.localStream.getVideoTracks()[0];
-                    const capabilities = track.getCapabilities();
-                    if(capabilities.torch) {
-                        nightVision.hasTorch = true;
-                        document.getElementById('btn-torch-cam').classList.remove('hidden');
-                    }
-                } catch(e) {}
-            },
-
-            setTorch: (on) => {
-                if(!nightVision.hasTorch || !app.localStream) return;
-                const track = app.localStream.getVideoTracks()[0];
-                track.applyConstraints({ advanced: [{ torch: on }] }).catch(e => console.log("Erro lanterna", e));
-            },
-            
-            toggleTorch: () => {
-                if(ui.mode !== 'camera') return;
-                const btn = document.getElementById('btn-torch-cam');
-                const isOn = btn.classList.contains('text-white');
-                
-                if(!isOn) {
-                    nightVision.setTorch(true);
-                    btn.classList.remove('text-yellow-400');
-                    btn.classList.add('text-white', 'bg-yellow-600');
-                } else {
-                    nightVision.setTorch(false);
-                    btn.classList.remove('text-white', 'bg-yellow-600');
-                    btn.classList.add('text-yellow-400');
-                }
-            },
-
-            toggleManual: () => {
-                nightVision.manualOverride = !nightVision.manualOverride;
-                const v = document.getElementById('vid-main');
-                if(nightVision.manualOverride) {
-                    v.classList.add('night-vision');
-                    ui.log("Filtro Noturno: ATIVADO");
-                } else {
-                    v.classList.remove('night-vision');
-                    ui.log("Filtro Noturno: DESATIVADO");
-                }
-            },
-
-            checkBrightness: () => {
-                if (nightVision.manualOverride || ui.mode !== 'camera') return;
-
-                const { video, canvas, ctx } = nightVision;
-                if (video.readyState < 2) return;
-
-                canvas.width = 40;
-                canvas.height = 40;
-                ctx.drawImage(video, 0, 0, 40, 40);
-
-                try {
-                    const frame = ctx.getImageData(0, 0, 40, 40);
-                    const data = frame.data;
-                    let colorSum = 0;
-
-                    for (let x = 0, len = data.length; x < len; x += 4) {
-                        const avg = (data[x] + data[x + 1] + data[x + 2]) / 3;
-                        colorSum += avg;
-                    }
-
-                    const brightness = Math.floor(colorSum / (40 * 40));
-
-                    if (brightness < 40 && !nightVision.active) {
-                        nightVision.active = true;
-                        video.classList.add('night-vision');
-                        document.getElementById('badge-status').classList.add('nv-active');
-                        if(brightness < 15) nightVision.setTorch(true);
-                    } else if (brightness > 60 && nightVision.active) {
-                        nightVision.active = false;
-                        video.classList.remove('night-vision');
-                        document.getElementById('badge-status').classList.remove('nv-active');
-                        nightVision.setTorch(false);
-                    }
-                } catch(e) {}
-            }
-        };
 
         // === UI MODULE ===
         const ui = {
@@ -405,10 +272,7 @@
                 v.muted = false; v.play();
                 document.getElementById('btn-sound').classList.add('hidden');
             },
-            forceReload: () => {
-                 // Força recarregamento da página sem cache
-                 location.reload(true);
-            },
+            forceReload: () => { location.reload(true); },
             showReconnect: (show) => {
                 const el = document.getElementById('reconnect-overlay');
                 const v = document.getElementById('vid-main');
@@ -494,7 +358,6 @@
                 else app.startMonitor(PREFIX + id, pin);
             },
             stop: () => {
-                nightVision.stop();
                 if(app.connectionCheck) clearInterval(app.connectionCheck);
                 if(app.retryTimeout) clearTimeout(app.retryTimeout);
                 if(app.disconnectTimer) clearTimeout(app.disconnectTimer);
@@ -512,7 +375,7 @@
                 document.getElementById('loader').classList.remove('hidden');
                 document.getElementById('stealth-layer').style.display = 'none';
                 
-                ['btn-talk','btn-swap','btn-sound','btn-fit','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay', 'btn-night', 'btn-torch-cam'].forEach(i => {
+                ['btn-talk','btn-swap','btn-sound','btn-fit','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay'].forEach(i => {
                     const el = document.getElementById(i);
                     if(el) el.classList.add('hidden');
                 });
@@ -526,6 +389,7 @@
                 document.getElementById('btn-stealth').classList.remove('hidden');
                 document.getElementById('loader-txt').innerText = "INICIANDO HARDWARE...";
 
+                // Configurações simplificadas para máxima compatibilidade iPhone/Android
                 let constraints = { 
                     audio: { echoCancellation: true, noiseSuppression: true },
                     video: { facingMode: app.currentFacing }
@@ -534,11 +398,10 @@
                 try {
                     app.localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 } catch(err1) {
-                    console.warn("Fallback to basic constraints", err1);
                     try {
                         app.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                     } catch(err2) {
-                        alert("Erro Fatal: Câmera não acessível. Verifique permissões.");
+                        alert("Erro: Permissão de câmera negada.");
                         app.stop(); return;
                     }
                 }
@@ -546,15 +409,11 @@
                 const v = document.getElementById('vid-main');
                 v.srcObject = app.localStream;
                 v.muted = true; 
-                // Fix para Tela Preta no Local: Garantir play
-                v.onloadedmetadata = () => {
-                     v.play().catch(e => console.log("Play local error:", e));
-                };
+                v.onloadedmetadata = () => { v.play().catch(e => {}); };
 
                 if(isMobile) document.getElementById('btn-swap').classList.remove('hidden');
 
-                nightVision.start();
-                document.getElementById('loader-txt').innerText = "CONECTANDO À REDE...";
+                document.getElementById('loader-txt').innerText = "CONECTANDO...";
                 app.initPeer(myId, pin);
             },
 
@@ -566,25 +425,22 @@
                 app.peer.on('open', () => { 
                     document.getElementById('loader').classList.add('hidden'); 
                     document.getElementById('badge-status').classList.remove('hidden');
-                    // Não mostra "sinal fraco" logo de cara
                     ui.showReconnect(false);
 
                     app.connectionCheck = setInterval(() => {
                         if(app.peer && !app.peer.disconnected) {
                             app.peer.socket.send({type: 'heartbeat'});
                         }
-                    }, 4000);
+                    }, 5000);
                 });
                 
                 app.peer.on('error', e => {
                     if(e.type==='unavailable-id') { 
-                        alert("ID em uso! Uma sessão anterior ainda está ativa.\nAguarde 1 minuto ou mude o ID.");
+                        alert("ID em uso! Tente outro.");
                         app.stop();
-                    }
-                    else if (e.type === 'peer-unavailable') { ui.log("Peer não encontrado"); }
-                    else if (e.type === 'network' || e.type === 'disconnected' || e.type === 'server-error') { 
-                         ui.log("Reconectando...");
-                         setTimeout(() => { if(app.peer) app.peer.reconnect(); }, 2000); 
+                    } else if (e.type === 'disconnected' || e.type === 'network' || e.type === 'server-error') {
+                        // Tenta reconexão silenciosa
+                        if(app.peer) app.peer.reconnect();
                     }
                 });
 
@@ -598,7 +454,7 @@
                             
                             const call = app.peer.call(conn.peer, app.localStream);
                             
-                            // Check de segurança antes de mexer na Bitrate
+                            // Limite de banda para estabilidade
                             const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
                             if(sender) {
                                 const params = sender.getParameters();
@@ -624,11 +480,14 @@
                     });
                 });
                 
+                // Receber chamada de áudio do monitor
                 app.peer.on('call', call => { 
                     call.answer(); 
                     call.on('stream', st => { 
                         const a = document.getElementById('audio-intercom'); 
-                        a.srcObject = st; a.play().catch(()=>{}); 
+                        a.srcObject = st; 
+                        // Importante para iPhone: Tentar play()
+                        a.play().catch(e => console.log("Erro audio in:", e));
                     }); 
                 });
             },
@@ -645,9 +504,8 @@
             startMonitor: (targetId, pin) => {
                 document.getElementById('btn-talk').classList.remove('hidden');
                 document.getElementById('btn-fit').classList.remove('hidden');
-                document.getElementById('btn-night').classList.remove('hidden');
                 document.getElementById('badge-status').classList.remove('hidden');
-                document.getElementById('loader-txt').innerText = "BUSCANDO SINAL...";
+                document.getElementById('loader-txt').innerText = "BUSCANDO...";
                 
                 if(app.peer) app.peer.destroy();
 
@@ -655,15 +513,14 @@
                 
                 app.retryTimeout = setTimeout(() => {
                     if(!app.activeCall) {
-                        ui.log("Sem resposta. Tentando novamente...");
+                        ui.log("Sem resposta. Tentando...");
                         app.startMonitor(targetId, pin);
                     }
-                }, 12000);
+                }, 15000);
 
                 app.peer.on('open', () => app.connectToCamera(targetId, pin));
                 
                 app.peer.on('error', e => { 
-                    console.log("Monitor Error:", e.type);
                     setTimeout(() => app.startMonitor(targetId, pin), 3000); 
                 });
             },
@@ -678,11 +535,10 @@
                 });
                 
                 conn.on('close', () => { 
-                   // Delay BEM LONGO antes de assumir queda de sinal (8 segundos)
                    app.disconnectTimer = setTimeout(() => {
                         ui.showReconnect(true); 
                         setTimeout(() => app.connectToCamera(targetId, pin), 2000);
-                   }, 8000);
+                   }, 5000);
                 });
 
                 conn.on('error', (err) => {
@@ -700,13 +556,11 @@
                         v.srcObject = stream; 
                         v.muted = false; 
                         
-                        // Fix Crítico para iPhone: Garantir Play no metadados
                         v.onloadedmetadata = () => {
                              const playPromise = v.play();
                              if (playPromise !== undefined) {
                                 playPromise.catch(error => {
-                                    console.warn("Auto-play blocked", error);
-                                    v.muted = true; // Fallback mudo
+                                    v.muted = true;
                                     v.play();
                                     document.getElementById('btn-sound').classList.remove('hidden');
                                 });
@@ -715,14 +569,13 @@
                     });
 
                     call.on('close', () => {
-                        app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 5000);
+                        app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 3000);
                     });
                     
                     call.peerConnection.oniceconnectionstatechange = () => {
                         const state = call.peerConnection.iceConnectionState;
-                        // Relaxando a verificação de sinal: Só mostra erro se estiver desconectado por muito tempo
                         if (state === 'disconnected') {
-                            app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 8000);
+                            app.disconnectTimer = setTimeout(() => ui.showReconnect(true), 6000);
                         } else if (state === 'connected' || state === 'completed') {
                             if(app.disconnectTimer) clearTimeout(app.disconnectTimer);
                             ui.showReconnect(false);
@@ -739,6 +592,7 @@
                 document.getElementById('btn-talk').classList.add('talking');
                 try { 
                     app.micStream = await navigator.mediaDevices.getUserMedia({audio:true}); 
+                    // Chama a câmera enviando apenas áudio
                     app.peer.call(app.activeCall.peer, app.micStream); 
                 } catch(e){ alert("Microfone bloqueado."); }
             },
@@ -765,8 +619,6 @@
                     
                     document.getElementById('vid-main').srcObject = newStream;
                     app.localStream = newStream;
-
-                    if(nightVision.active) nightVision.checkTorchSupport();
 
                     Object.values(app.peer.connections).forEach(conns => {
                         conns.forEach(c => {
