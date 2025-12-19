@@ -188,11 +188,9 @@
         const ICE_SERVERS = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun.cloudflare.com:3478' } // Essencial para estabilidade móvel
+                { urls: 'stun:global.stun.twilio.com:3478' } // Twilio ajuda muito no 4G
             ],
-            sdpSemantics: 'unified-plan' 
+            sdpSemantics: 'unified-plan'
         };
         const PREFIX = "sc30-colorfix-";
 
@@ -373,11 +371,11 @@
                 app.peer.on('connection', conn => {
                     conn.on('data', data => {
                         if (data.auth === pin) {
-                            // CORREÇÃO CONTAGEM: Evita duplicar o mesmo peer ID
-                            app.monitors = app.monitors.filter(c => c.peer !== conn.peer);
+                            // CORREÇÃO CONTAGEM: Filtra ID duplicado antes de adicionar
+                            app.monitors = app.monitors.filter(m => m.peer !== conn.peer);
                             app.monitors.push(conn);
-                            
                             document.getElementById('viewer-count').innerText = app.monitors.length;
+
                             const call = app.peer.call(conn.peer, app.localStream);
                             const sender = call.peerConnection.getSenders().find(s=>s.track.kind==='video');
                             if(sender) {
@@ -386,10 +384,19 @@
                                 p.encodings[0].maxBitrate = 500000;
                                 sender.setParameters(p).catch(()=>{});
                             }
+                            
                             conn.on('close', () => { 
                                 app.monitors = app.monitors.filter(c=>c.peer!==conn.peer); 
                                 document.getElementById('viewer-count').innerText = app.monitors.length; 
                             });
+
+                            // Limpa conexão morta se detectar desconexão
+                            conn.peerConnection.oniceconnectionstatechange = () => {
+                                if(conn.peerConnection.iceConnectionState === 'disconnected') {
+                                     app.monitors = app.monitors.filter(m => m.peer !== conn.peer);
+                                     document.getElementById('viewer-count').innerText = app.monitors.length;
+                                }
+                            }
                         }
                     });
                 });
@@ -432,14 +439,6 @@
                         v.play().catch(() => { v.muted = true; v.play(); document.getElementById('btn-sound').classList.remove('hidden'); });
                         app.watchdogStart(v);
                     });
-                    
-                    // CORREÇÃO IPHONE 4G: Detecta desconexão de rede móvel agressivamente
-                    call.peerConnection.oniceconnectionstatechange = () => {
-                        if(call.peerConnection.iceConnectionState === 'disconnected' || call.peerConnection.iceConnectionState === 'failed') {
-                            ui.showReconnect(true);
-                        }
-                    };
-
                     call.on('close', () => ui.showReconnect(true));
                 });
             },
