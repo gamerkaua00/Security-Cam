@@ -92,7 +92,7 @@
                 <input type="text" id="inp-name" class="w-full bg-zinc-900 border border-emerald-900/50 rounded-xl p-4 text-emerald-100 focus:border-emerald-500 focus:shadow-[0_0_10px_rgba(16,185,129,0.2)] outline-none appearance-none transition-all hidden" placeholder="Apelido (ex: Base)" autocomplete="off">
                 <div class="flex gap-3">
                     <input type="text" id="inp-id" class="w-full bg-zinc-900 border border-emerald-900/50 rounded-xl p-4 text-emerald-400 font-mono uppercase focus:border-emerald-500 focus:shadow-[0_0_10px_rgba(16,185,129,0.2)] outline-none appearance-none transition-all" placeholder="ID" required autocomplete="off">
-                    <input type="password" id="inp-pin" class="w-28 bg-zinc-900 border border-emerald-900/50 rounded-xl p-4 text-center text-emerald-400 font-mono focus:border-emerald-500 focus:shadow-[0_0_10px_rgba(16,185,129,0.2)] outline-none appearance-none transition-all" placeholder="PIN" required inputmode="numeric">
+                    <input type="password" id="inp-pin" class="w-32 bg-zinc-900 border border-emerald-900/50 rounded-xl p-4 text-center text-emerald-400 font-mono focus:border-emerald-500 focus:shadow-[0_0_10px_rgba(16,185,129,0.2)] outline-none appearance-none transition-all" placeholder="PIN" required inputmode="numeric" pattern="[0-9]{6,}" minlength="6" title="Mínimo de 6 dígitos numéricos">
                 </div>
                 <button type="submit" id="btn-start" class="w-full bg-emerald-600 hover:bg-emerald-500 text-black font-bold py-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] mt-2 active:scale-95 transition-all"><i class="fa-solid fa-video mr-2"></i> INICIAR</button>
             </form>
@@ -418,6 +418,7 @@
             },
 
             // MONITOR
+            reconnectTimer: null,
             startMonitor: (targetId, pin) => {
                 document.getElementById('btn-talk').classList.remove('hidden');
                 document.getElementById('btn-fit').classList.remove('hidden');
@@ -425,39 +426,49 @@
                 document.getElementById('loader-txt').innerText = "BUSCANDO SINAL...";
                 
                 app.peer = new Peer(null, { debug: 1, config: ICE_SERVERS });
-                app.peer.on('open', () => app.connect(targetId, pin));
-                app.peer.on('error', e => { ui.log("Erro: " + e.type); setTimeout(()=>app.startMonitor(targetId, pin), 3000); });
+                app.peer.on('open', () => {
+                    app.connect(targetId, pin);
+                    // Handler de 'call' registrado uma única vez por peer, não a cada reconexão
+                    app.peer.on('call', call => {
+                        app.activeCall = call; call.answer();
+                        call.on('stream', stream => {
+                            document.getElementById('loader').classList.add('hidden');
+                            ui.showReconnect(false);
+                            const v = document.getElementById('vid-main');
+                            v.srcObject = stream; v.muted = false;
+                            v.setAttribute('playsinline', '');
+                            v.play().catch(() => { v.muted = true; v.play(); document.getElementById('btn-sound').classList.remove('hidden'); });
+
+                            // WATCHDOG NATIVO (Otimizado para bateria)
+                            v.addEventListener('timeupdate', () => {
+                                if(v.paused || ui.mode !== 'monitor') return;
+                                if(v.buffered.length > 0) {
+                                    const diff = v.buffered.end(0) - v.currentTime;
+                                    // Só corrige se o atraso for maior que 1 segundo, poupando CPU
+                                    if(diff > 1.0) v.currentTime = v.buffered.end(0);
+                                }
+                            });
+                        });
+                        call.on('close', () => ui.showReconnect(true));
+                    });
+                });
+                app.peer.on('error', e => {
+                    ui.log("Erro: " + e.type);
+                    clearTimeout(app.reconnectTimer);
+                    app.reconnectTimer = setTimeout(()=>app.startMonitor(targetId, pin), 3000);
+                });
             },
 
             connect: (targetId, pin) => {
                 const conn = app.peer.connect(targetId);
                 conn.on('open', () => { ui.showReconnect(false); conn.send({auth: pin}); });
-                conn.on('close', () => { ui.showReconnect(true); setTimeout(()=>app.connect(targetId, pin), 3000); });
-                
-                app.peer.on('call', call => {
-                    app.activeCall = call; call.answer();
-                    call.on('stream', stream => {
-                        document.getElementById('loader').classList.add('hidden');
-                        ui.showReconnect(false);
-                        const v = document.getElementById('vid-main');
-                        v.srcObject = stream; v.muted = false;
-                        v.setAttribute('playsinline', '');
-                        v.play().catch(() => { v.muted = true; v.play(); document.getElementById('btn-sound').classList.remove('hidden'); });
-                        
-                        // WATCHDOG NATIVO (Otimizado para bateria)
-                        v.addEventListener('timeupdate', () => {
-                            if(v.paused || ui.mode !== 'monitor') return;
-                            if(v.buffered.length > 0) {
-                                const diff = v.buffered.end(0) - v.currentTime;
-                                // Só corrige se o atraso for maior que 1 segundo, poupando CPU
-                                if(diff > 1.0) v.currentTime = v.buffered.end(0);
-                            }
-                        });
-                    });
-                    call.on('close', () => ui.showReconnect(true));
+                conn.on('close', () => {
+                    ui.showReconnect(true);
+                    clearTimeout(app.reconnectTimer);
+                    app.reconnectTimer = setTimeout(()=>app.connect(targetId, pin), 3000);
                 });
             },
-            
+
             startTalk: async () => {
                 if (!app.activeCall || ui.mode !== 'monitor') return;
                 document.getElementById('btn-talk').classList.add('talking');
