@@ -172,7 +172,14 @@
         const ICE_SERVERS = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' } 
+                { urls: 'stun:global.stun.twilio.com:3478' },
+                // TURN relay: essencial para conectar atrás de NAT simétrico/CGNAT
+                // (4G, redes corporativas, ou cruzando países) onde STUN sozinho falha.
+                // Servidor de demonstração público (openrelay) — para produção,
+                // troque por um TURN próprio ou um serviço pago (Twilio, Metered, etc).
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
             ],
             sdpSemantics: 'unified-plan'
         };
@@ -358,7 +365,17 @@
                 });
 
                 app.peer.on('connection', conn => {
+                    let pinAttempts = 0;
                     conn.on('data', data => {
+                        if (pinAttempts >= 3) {
+                            conn.close();
+                            return;
+                        }
+                        if (data.auth !== pin) {
+                            pinAttempts++;
+                            if (pinAttempts >= 3) conn.close();
+                            return;
+                        }
                         if (data.auth === pin) {
                             app.monitors = app.monitors.filter(m => m.peer !== conn.peer);
                             app.monitors.push(conn);
