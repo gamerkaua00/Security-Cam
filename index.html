@@ -201,6 +201,24 @@
             if (wakeLock !== null && document.visibilityState === 'visible') {
                 requestWakeLock();
             }
+            if (document.visibilityState === 'visible' && typeof app !== 'undefined' && app.lastCreds) {
+                // Timers normais (setTimeout) podem ficar suspensos por minutos em segundo
+                // plano no navegador mobile. Ao voltar pro app, força uma checagem imediata
+                // em vez de esperar o retry (que pode nunca ter disparado).
+                if (app.role === 'camera') {
+                    if (!app.peer || app.peer.destroyed) {
+                        app.startCamera(app.lastCreds.myId, app.lastCreds.pin);
+                    } else if (app.peer.disconnected) {
+                        try { app.peer.reconnect(); } catch(e) {}
+                    }
+                } else if (app.role === 'monitor') {
+                    if (!app.peer || app.peer.destroyed) {
+                        app.startMonitor(app.lastCreds.targetId, app.lastCreds.pin);
+                    } else if (app.peer.disconnected) {
+                        try { app.peer.reconnect(); } catch(e) {}
+                    }
+                }
+            }
         });
 
         const syncFitIcon = () => {
@@ -316,7 +334,7 @@
         // === APP LOGIC ===
         const app = {
             peer: null, localStream: null, micStream: null, activeCall: null,
-            monitors: [], currentFacing: 'environment',
+            monitors: [], currentFacing: 'environment', role: null, lastCreds: null, reconnectTimer: null,
 
             broadcastViewerCount: () => {
                 const n = app.monitors.length;
@@ -354,6 +372,8 @@
                 if(app.peer) { app.peer.destroy(); app.peer=null; }
                 
                 app.monitors = []; app.activeCall = null;
+                app.role = null; app.lastCreds = null;
+                clearTimeout(app.reconnectTimer);
                 const v = document.getElementById('vid-main');
                 v.srcObject = null;
                 
@@ -368,6 +388,8 @@
 
             // CAMERA
             startCamera: async (myId, pin) => {
+                app.role = 'camera';
+                app.lastCreds = { myId, pin };
                 document.getElementById('badge-viewers').classList.remove('hidden');
                 document.getElementById('btn-stealth').classList.remove('hidden');
                 document.getElementById('loader-txt').innerText = "INICIALIZANDO LENTES...";
@@ -406,6 +428,26 @@
                 app.peer.on('error', e => {
                     if(e.type==='unavailable-id') { alert("ID em uso!"); app.stop(); }
                     else ui.log("Erro: " + e.type);
+                });
+
+                app.peer.on('disconnected', () => {
+                    // Sinalização caiu (ex: rede instável) mas o peer ainda está vivo:
+                    // reconnect() recupera a MESMA identidade (ID), sem isso os espectadores
+                    // que já salvaram essa câmera deixariam de conseguir conectar.
+                    ui.log("Sinal perdido, reconectando...");
+                    setTimeout(() => {
+                        if (app.peer && !app.peer.destroyed) {
+                            try { app.peer.reconnect(); } catch(e) {}
+                        }
+                    }, 1500);
+                });
+
+                app.peer.on('close', () => {
+                    // Peer morreu de vez (raro): só recriar do zero resolve, com o mesmo ID/PIN
+                    if (app.role === 'camera' && app.lastCreds) {
+                        ui.log("Conexão encerrada, reiniciando...");
+                        setTimeout(() => app.startCamera(app.lastCreds.myId, app.lastCreds.pin), 1500);
+                    }
                 });
 
                 app.peer.on('connection', conn => {
@@ -476,8 +518,9 @@
             },
 
             // MONITOR
-            reconnectTimer: null,
             startMonitor: (targetId, pin) => {
+                app.role = 'monitor';
+                app.lastCreds = { targetId, pin };
                 // Garante que não sobra peer antigo vivo (conexões fantasmas) antes de recriar
                 if (app.peer && !app.peer.destroyed) {
                     try { app.peer.removeAllListeners(); app.peer.destroy(); } catch(e) {}
@@ -517,6 +560,15 @@
                         call.on('close', () => ui.showReconnect(true));
                     });
                 });
+                app.peer.on('disconnected', () => {
+                    ui.showReconnect(true);
+                    setTimeout(() => {
+                        if (app.peer && !app.peer.destroyed) {
+                            try { app.peer.reconnect(); } catch(e) {}
+                        }
+                    }, 1500);
+                });
+
                 app.peer.on('error', e => {
                     ui.log("Erro: " + e.type);
                     clearTimeout(app.reconnectTimer);
