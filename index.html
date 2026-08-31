@@ -8,9 +8,10 @@
     <title>SecuriCam V30</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link id="manifest-placeholder" rel="manifest">
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3682/3682323.png">
 
     <style>
         /* Base */
@@ -298,7 +299,15 @@
             renderList: () => {
                 const container = document.getElementById('saved-list');
                 container.innerHTML = "";
-                storage.get().forEach(cam => {
+                const cams = storage.get();
+                if (cams.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = "text-center text-xs text-emerald-900 py-4 font-mono";
+                    empty.textContent = "Nenhum terminal salvo ainda.";
+                    container.appendChild(empty);
+                    return;
+                }
+                cams.forEach(cam => {
                     const div = document.createElement('div');
                     div.className = "cam-item";
 
@@ -549,14 +558,16 @@
                             v.play().catch(() => { v.muted = true; v.play(); document.getElementById('btn-sound').classList.remove('hidden'); });
 
                             // WATCHDOG NATIVO (Otimizado para bateria)
-                            v.addEventListener('timeupdate', () => {
+                            if (v._watchdogHandler) v.removeEventListener('timeupdate', v._watchdogHandler);
+                            v._watchdogHandler = () => {
                                 if(v.paused || ui.mode !== 'monitor') return;
                                 if(v.buffered.length > 0) {
                                     const diff = v.buffered.end(0) - v.currentTime;
                                     // Só corrige se o atraso for maior que 1 segundo, poupando CPU
                                     if(diff > 1.0) v.currentTime = v.buffered.end(0);
                                 }
-                            });
+                            };
+                            v.addEventListener('timeupdate', v._watchdogHandler);
                         });
                         call.on('close', () => ui.showReconnect(true));
                     });
@@ -616,9 +627,15 @@
                     app.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                 }
                 document.getElementById('vid-main').srcObject = app.localStream;
+                const newVideoTrack = app.localStream.getVideoTracks()[0];
+                const newAudioTrack = app.localStream.getAudioTracks()[0];
                 Object.values(app.peer.connections).forEach(conns => conns.forEach(c => {
-                    const s = c.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                    if(s) s.replaceTrack(app.localStream.getVideoTracks()[0]);
+                    if (!c.peerConnection) return;
+                    c.peerConnection.getSenders().forEach(s => {
+                        if (!s.track) return;
+                        if (s.track.kind === 'video' && newVideoTrack) s.replaceTrack(newVideoTrack);
+                        else if (s.track.kind === 'audio' && newAudioTrack) s.replaceTrack(newAudioTrack);
+                    });
                 }));
             }
         };
