@@ -203,6 +203,15 @@
             }
         });
 
+        const syncFitIcon = () => {
+            const i = document.getElementById('icon-fit'), v = document.getElementById('vid-main');
+            if (!i || !v) return;
+            if (document.fullscreenElement) { i.classList.replace('fa-expand','fa-compress'); v.classList.add('filled'); }
+            else { i.classList.replace('fa-compress','fa-expand'); v.classList.remove('filled'); }
+        };
+        document.addEventListener('fullscreenchange', syncFitIcon);
+        document.addEventListener('webkitfullscreenchange', syncFitIcon);
+
         // === UI MODULE ===
         const ui = {
             mode: 'camera',
@@ -224,8 +233,18 @@
                 }
             },
             log: (msg) => { const e=document.getElementById('log'); e.innerText=msg; if(msg) setTimeout(()=>e.innerText="", 4000); },
-            toggleFit: () => {
+            toggleFit: async () => {
                 const v = document.getElementById('vid-main'), i = document.getElementById('icon-fit');
+                const stage = document.getElementById('ui-app');
+                try {
+                    if (!document.fullscreenElement) {
+                        if (stage.requestFullscreen) await stage.requestFullscreen();
+                        else if (stage.webkitRequestFullscreen) await stage.webkitRequestFullscreen();
+                    } else {
+                        if (document.exitFullscreen) await document.exitFullscreen();
+                        else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+                    }
+                } catch(e) { /* alguns navegadores exigem gesto direto do usuário; ignora se falhar */ }
                 if(v.classList.contains('filled')) { v.classList.remove('filled'); i.classList.replace('fa-compress','fa-expand'); }
                 else { v.classList.add('filled'); i.classList.replace('fa-expand','fa-compress'); }
             },
@@ -264,13 +283,31 @@
                 storage.get().forEach(cam => {
                     const div = document.createElement('div');
                     div.className = "cam-item";
-                    div.innerHTML = `
-                        <div class="flex-1" onclick="app.load('${cam.id}', '${cam.pin}')">
-                            <div class="text-sm font-bold text-emerald-100">${cam.name}</div>
-                            <div class="text-[10px] text-emerald-500 font-mono"><i class="fa-solid fa-fingerprint"></i> ID: ${cam.id}</div>
-                        </div>
-                        <button onclick="storage.remove('${cam.id}')" class="text-emerald-900 hover:text-red-500 px-3 transition-colors"><i class="fa-solid fa-trash"></i></button>
-                    `;
+
+                    const info = document.createElement('div');
+                    info.className = "flex-1";
+                    info.style.cursor = "pointer";
+                    info.addEventListener('click', () => app.load(cam.id, cam.pin));
+
+                    const nameEl = document.createElement('div');
+                    nameEl.className = "text-sm font-bold text-emerald-100";
+                    nameEl.textContent = cam.name; // textContent: seguro contra HTML/aspas no apelido
+
+                    const idEl = document.createElement('div');
+                    idEl.className = "text-[10px] text-emerald-500 font-mono";
+                    idEl.innerHTML = `<i class="fa-solid fa-fingerprint"></i> ID: `;
+                    idEl.appendChild(document.createTextNode(cam.id));
+
+                    info.appendChild(nameEl);
+                    info.appendChild(idEl);
+
+                    const delBtn = document.createElement('button');
+                    delBtn.className = "text-emerald-900 hover:text-red-500 px-3 transition-colors";
+                    delBtn.innerHTML = `<i class="fa-solid fa-trash"></i>`;
+                    delBtn.addEventListener('click', () => storage.remove(cam.id));
+
+                    div.appendChild(info);
+                    div.appendChild(delBtn);
                     container.appendChild(div);
                 });
             }
@@ -330,8 +367,8 @@
 
                 try {
                     let constraints = isMobile 
-                        ? { audio: { echoCancellation: false, noiseSuppression: false }, video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } }
-                        : { audio: true, video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } };
+                        ? { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } }
+                        : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } };
 
                     try {
                         app.localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -485,7 +522,7 @@
                 app.localStream.getTracks().forEach(t => t.stop());
                 try {
                     app.localStream = await navigator.mediaDevices.getUserMedia({
-                        audio: { echoCancellation: false },
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
                         video: { facingMode: app.currentFacing, width: 640, height: 480, frameRate: 15 }
                     });
                 } catch(e) {
