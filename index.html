@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
-    <title>SecuriCam V30</title>
+    <title>SecurityCam</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" defer></script>
@@ -77,10 +77,13 @@
 <body class="antialiased">
 
     <div id="ui-setup" class="absolute inset-0 z-50 bg-[#000000] flex flex-col p-6 overflow-y-auto">
+        <button onclick="ui.toggleCredits(true)" class="absolute top-6 right-6 w-9 h-9 rounded-full border border-emerald-900/50 text-emerald-600 hover:text-emerald-400 hover:border-emerald-500 flex items-center justify-center transition-all z-10" title="Créditos">
+            <i class="fa-solid fa-circle-info text-sm"></i>
+        </button>
         <div class="w-full max-w-sm mx-auto mt-8">
             <div class="text-center mb-8">
                 <i class="fa-solid fa-microchip text-4xl text-emerald-500 mb-2 drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]"></i>
-                <h1 class="text-3xl font-black text-white tracking-tight">SECURICAM <span class="text-emerald-500">V30</span></h1>
+                <h1 class="text-3xl font-black text-white tracking-tight">SECURITY<span class="text-emerald-500">CAM</span></h1>
                 <p class="text-[10px] text-emerald-500/50 uppercase tracking-widest mt-1 font-bold">Encrypted & Optimized</p>
             </div>
 
@@ -164,6 +167,22 @@
         <div id="stealth-layer" ondblclick="ui.toggleStealth()"></div>
     </div>
 
+    <div id="credits-overlay" class="absolute inset-0 z-[60] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-6">
+        <div class="w-full max-w-sm bg-zinc-950 border border-emerald-900/50 rounded-2xl p-6 text-center shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+            <i class="fa-solid fa-shield-halved text-3xl text-emerald-500 mb-3 drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]"></i>
+            <h2 class="text-lg font-black text-white tracking-tight mb-1">SECURITY<span class="text-emerald-500">CAM</span></h2>
+            <p class="text-emerald-100 text-sm font-bold mt-4">Kauã Mazur dos Reis</p>
+            <p class="text-emerald-600 text-xs mt-1">&copy; 2026. Todos os direitos reservados.</p>
+            <div class="mt-5 pt-5 border-t border-emerald-900/30">
+                <p class="text-[10px] text-emerald-600 uppercase tracking-wider font-bold mb-2">Dicas, sugestões ou bugs</p>
+                <a href="mailto:kmzsuportt1@gmail.com" class="text-emerald-400 text-sm font-mono hover:text-emerald-300 transition-colors break-all">
+                    <i class="fa-solid fa-envelope mr-1"></i> kmzsuportt1@gmail.com
+                </a>
+            </div>
+            <button onclick="ui.toggleCredits(false)" class="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-black font-bold py-3 rounded-xl transition-all">FECHAR</button>
+        </div>
+    </div>
+
     <audio id="keep-alive" loop style="display:none;">
         <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA//oeAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD//////////////////////////////////////////////////////////////////wAAAAA=" type="audio/mpeg">
     </audio>
@@ -182,11 +201,12 @@
                 { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
                 { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
             ],
-            sdpSemantics: 'unified-plan'
+            sdpSemantics: 'unified-plan',
+            iceCandidatePoolSize: 10
         };
         const PREFIX = "sc30-opt-";
 
-        const m = { "name": "SecuriCam V30", "display": "standalone", "background_color": "#000000", "theme_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
+        const m = { "name": "SecurityCam", "display": "standalone", "background_color": "#000000", "theme_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
         document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(new Blob([JSON.stringify(m)], {type: 'application/json'})));
 
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -230,6 +250,23 @@
         };
         document.addEventListener('fullscreenchange', syncFitIcon);
         document.addEventListener('webkitfullscreenchange', syncFitIcon);
+
+        // Kick periódico: se o navegador pausar a mídia sozinho (economia de energia,
+        // política de autoplay) enquanto deveria estar tocando, tenta retomar sem
+        // precisar de nenhuma ação do usuário.
+        setInterval(() => {
+            if (typeof app === 'undefined' || !app.role) return;
+            if (app.role === 'monitor') {
+                const v = document.getElementById('vid-main');
+                const reconnecting = !document.getElementById('reconnect-overlay').classList.contains('hidden');
+                if (v && v.srcObject && v.paused && !reconnecting) {
+                    v.play().catch(() => {});
+                }
+            } else if (app.role === 'camera') {
+                const a = document.getElementById('audio-intercom');
+                if (a && a.srcObject && a.paused) a.play().catch(() => {});
+            }
+        }, 10000);
 
         // === UI MODULE ===
         const ui = {
@@ -281,6 +318,9 @@
                 const el = document.getElementById('reconnect-overlay');
                 if(show) { el.classList.remove('hidden'); document.getElementById('vid-main').classList.add('offline'); }
                 else { el.classList.add('hidden'); document.getElementById('vid-main').classList.remove('offline'); }
+            },
+            toggleCredits: (show) => {
+                document.getElementById('credits-overlay').classList.toggle('hidden', !show);
             }
         };
 
@@ -343,13 +383,42 @@
         // === APP LOGIC ===
         const app = {
             peer: null, localStream: null, micStream: null, activeCall: null,
-            monitors: [], currentFacing: 'environment', role: null, lastCreds: null, reconnectTimer: null,
+            monitors: [], currentFacing: 'environment', role: null, lastCreds: null, reconnectTimer: null, mediaConstraints: null,
 
             broadcastViewerCount: () => {
                 const n = app.monitors.length;
                 const el = document.getElementById('viewer-count');
                 if (el) el.innerText = n;
                 app.monitors.forEach(m => { try { m.send({ viewerCount: n }); } catch(e) {} });
+            },
+
+            healLocalTrack: async (kind) => {
+                if (!app.localStream || app.role !== 'camera') return;
+                ui.log(kind === 'audio' ? "Microfone caiu, recuperando..." : "Câmera caiu, recuperando...");
+                try {
+                    const c = app.mediaConstraints || {};
+                    const freshConstraints = kind === 'audio' ? { audio: c.audio || true } : { video: c.video || true };
+                    const freshStream = await navigator.mediaDevices.getUserMedia(freshConstraints);
+                    const newTrack = kind === 'audio' ? freshStream.getAudioTracks()[0] : freshStream.getVideoTracks()[0];
+                    if (!newTrack) return;
+
+                    const oldTrack = kind === 'audio' ? app.localStream.getAudioTracks()[0] : app.localStream.getVideoTracks()[0];
+                    if (oldTrack) app.localStream.removeTrack(oldTrack);
+                    app.localStream.addTrack(newTrack);
+                    newTrack.onended = () => app.healLocalTrack(newTrack.kind);
+
+                    if (kind === 'video') document.getElementById('vid-main').srcObject = app.localStream;
+
+                    if (app.peer) {
+                        Object.values(app.peer.connections).forEach(conns => conns.forEach(c => {
+                            if (!c.peerConnection) return;
+                            const sender = c.peerConnection.getSenders().find(s => s.track && s.track.kind === kind);
+                            if (sender) sender.replaceTrack(newTrack).catch(()=>{});
+                        }));
+                    }
+                } catch(e) {
+                    ui.log("Falha ao recuperar " + (kind === 'audio' ? "microfone" : "câmera"));
+                }
             },
 
             saveAndStart: (e) => {
@@ -406,8 +475,8 @@
 
                 try {
                     let constraints = isMobile 
-                        ? { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } }
-                        : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } };
+                        ? { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false, channelCount: 1 }, video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } }
+                        : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false, channelCount: 1 }, video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } };
 
                     try {
                         app.localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -416,11 +485,16 @@
                         app.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                         if(isMobile) app.currentFacing = 'user';
                     }
+                    app.mediaConstraints = constraints;
                     
                     const v = document.getElementById('vid-main');
                     v.srcObject = app.localStream;
                     v.muted = true; 
                     if(isMobile) document.getElementById('btn-swap').classList.remove('hidden');
+
+                    app.localStream.getTracks().forEach(track => {
+                        track.onended = () => app.healLocalTrack(track.kind);
+                    });
 
                 } catch(e) { 
                     alert("Erro Fatal: Sem acesso à câmera."); 
@@ -464,7 +538,11 @@
                     let pinAttempts = 0;
                     let authorized = false;
                     conn.on('data', data => {
-                        if (authorized) return; // já autenticado: ignora dados extras, evita duplicar a chamada/contagem
+                        if (authorized) {
+                            // Pós-autenticação: só tratamos respostas de heartbeat (pong) por aqui
+                            if (data && data.pong) conn._lastPong = Date.now();
+                            return;
+                        }
                         if (pinAttempts >= 3) {
                             conn.close();
                             return;
@@ -494,7 +572,20 @@
                             conn.on('close', () => { 
                                 app.monitors = app.monitors.filter(c=>c.peer!==conn.peer); 
                                 app.broadcastViewerCount();
+                                clearInterval(heartbeatInterval);
                             });
+
+                            // Heartbeat: pega conexões "zumbis" que ficam com ICE 'connected' mas
+                            // não trocam mais dados de verdade (acontece em relays TURN instáveis).
+                            conn._lastPong = Date.now();
+                            const heartbeatInterval = setInterval(() => {
+                                if (Date.now() - conn._lastPong > 35000) {
+                                    clearInterval(heartbeatInterval);
+                                    conn.close();
+                                    return;
+                                }
+                                try { conn.send({ ping: Date.now() }); } catch(e) {}
+                            }, 15000);
 
                             let iceGraceTimer = null;
                             conn.peerConnection.oniceconnectionstatechange = () => {
@@ -596,6 +687,9 @@
                         document.getElementById('viewer-count').innerText = data.viewerCount;
                         document.getElementById('badge-viewers').classList.remove('hidden');
                     }
+                    if (data && data.ping) {
+                        try { conn.send({ pong: true }); } catch(e) {}
+                    }
                 });
                 conn.on('close', () => {
                     ui.showReconnect(true);
@@ -620,7 +714,7 @@
                 app.localStream.getTracks().forEach(t => t.stop());
                 try {
                     app.localStream = await navigator.mediaDevices.getUserMedia({
-                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false, channelCount: 1 },
                         video: { facingMode: app.currentFacing, width: 640, height: 480, frameRate: 15 }
                     });
                 } catch(e) {
