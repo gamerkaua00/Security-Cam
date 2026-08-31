@@ -478,6 +478,13 @@
             // MONITOR
             reconnectTimer: null,
             startMonitor: (targetId, pin) => {
+                // Garante que não sobra peer antigo vivo (conexões fantasmas) antes de recriar
+                if (app.peer && !app.peer.destroyed) {
+                    try { app.peer.removeAllListeners(); app.peer.destroy(); } catch(e) {}
+                }
+                app.activeCall = null;
+
+                document.getElementById('loader').classList.remove('hidden');
                 document.getElementById('btn-talk').classList.remove('hidden');
                 document.getElementById('btn-fit').classList.remove('hidden');
                 document.getElementById('badge-status').classList.remove('hidden');
