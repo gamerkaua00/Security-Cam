@@ -142,6 +142,10 @@
                 <i class="fa-solid fa-share-nodes"></i>
             </button>
 
+            <button id="btn-record-cam" onclick="app.toggleRecording()" class="float-btn w-10 h-10 absolute top-36 right-20 z-50 hidden" aria-label="Gravar localmente nesta câmera">
+                <i class="fa-solid fa-circle-dot" id="icon-record-cam"></i>
+            </button>
+
             <button id="btn-record" onclick="app.toggleRecording()" class="float-btn w-10 h-10 absolute top-36 right-5 z-50 hidden" aria-label="Gravar localmente">
                 <i class="fa-solid fa-circle-dot" id="icon-record"></i>
             </button>
@@ -544,7 +548,7 @@
                 document.getElementById('ui-setup').classList.remove('hidden');
                 document.getElementById('loader').classList.remove('hidden');
                 document.getElementById('stealth-layer').style.display = 'none';
-                ['btn-talk','btn-swap','btn-sound','btn-fit','btn-share','btn-record','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay'].forEach(i=>document.getElementById(i).classList.add('hidden'));
+                ['btn-talk','btn-swap','btn-sound','btn-fit','btn-share','btn-record','btn-record-cam','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay'].forEach(i=>document.getElementById(i).classList.add('hidden'));
                 
                 if(ui.mode === 'monitor') storage.renderList();
             },
@@ -557,6 +561,7 @@
                 document.getElementById('btn-stealth').classList.remove('hidden');
                 document.getElementById('btn-fit').classList.remove('hidden');
                 document.getElementById('btn-share').classList.remove('hidden');
+                document.getElementById('btn-record-cam').classList.remove('hidden');
                 document.getElementById('loader-txt').innerText = "INICIALIZANDO LENTES...";
 
                 try {
@@ -812,8 +817,9 @@
                     app.mediaRecorder.stop();
                     return;
                 }
-                const v = document.getElementById('vid-main');
-                if (!v.srcObject) { ui.toast("Sem sinal pra gravar ainda"); return; }
+                const iconId = app.role === 'camera' ? 'icon-record-cam' : 'icon-record';
+                const stream = app.role === 'camera' ? app.localStream : document.getElementById('vid-main').srcObject;
+                if (!stream) { ui.toast("Sem sinal pra gravar ainda"); return; }
 
                 const mimeCandidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
                 const mimeType = mimeCandidates.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
@@ -821,14 +827,15 @@
 
                 app.recordedChunks = [];
                 try {
-                    app.mediaRecorder = new MediaRecorder(v.srcObject, { mimeType });
+                    app.mediaRecorder = new MediaRecorder(stream, { mimeType });
                 } catch(e) {
                     ui.toast("Não foi possível iniciar a gravação");
                     return;
                 }
                 app.mediaRecorder.ondataavailable = (ev) => { if (ev.data.size > 0) app.recordedChunks.push(ev.data); };
                 app.mediaRecorder.onstop = () => {
-                    document.getElementById('icon-record').classList.remove('text-red-500','animate-pulse');
+                    const icon = document.getElementById(iconId);
+                    if (icon) icon.classList.remove('text-red-500','animate-pulse');
                     if (app.recordedChunks.length === 0) return;
                     const blob = new Blob(app.recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
@@ -841,12 +848,17 @@
                     app.recordedChunks = [];
                 };
                 app.mediaRecorder.start(1000); // chunks a cada 1s: evita perder tudo se travar no meio
-                document.getElementById('icon-record').classList.add('text-red-500','animate-pulse');
+                const icon = document.getElementById(iconId);
+                if (icon) icon.classList.add('text-red-500','animate-pulse');
                 ui.toast("Gravando localmente...");
             },
 
             swapCam: async () => {
                 if(!app.localStream) return;
+                if (app.mediaRecorder && app.mediaRecorder.state === 'recording') {
+                    app.mediaRecorder.stop();
+                    ui.toast("Gravação salva — troca de câmera reinicia a gravação");
+                }
                 app.currentFacing = (app.currentFacing === 'environment') ? 'user' : 'environment';
                 app.localStream.getTracks().forEach(t => t.stop());
                 try {
