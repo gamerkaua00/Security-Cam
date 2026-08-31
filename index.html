@@ -318,6 +318,13 @@
             peer: null, localStream: null, micStream: null, activeCall: null,
             monitors: [], currentFacing: 'environment',
 
+            broadcastViewerCount: () => {
+                const n = app.monitors.length;
+                const el = document.getElementById('viewer-count');
+                if (el) el.innerText = n;
+                app.monitors.forEach(m => { try { m.send({ viewerCount: n }); } catch(e) {} });
+            },
+
             saveAndStart: (e) => {
                 e.preventDefault();
                 const name = document.getElementById('inp-name').value.trim();
@@ -403,7 +410,9 @@
 
                 app.peer.on('connection', conn => {
                     let pinAttempts = 0;
+                    let authorized = false;
                     conn.on('data', data => {
+                        if (authorized) return; // já autenticado: ignora dados extras, evita duplicar a chamada/contagem
                         if (pinAttempts >= 3) {
                             conn.close();
                             return;
@@ -413,10 +422,11 @@
                             if (pinAttempts >= 3) conn.close();
                             return;
                         }
-                        if (data.auth === pin) {
+                        authorized = true;
+                        {
                             app.monitors = app.monitors.filter(m => m.peer !== conn.peer);
                             app.monitors.push(conn);
-                            document.getElementById('viewer-count').innerText = app.monitors.length;
+                            app.broadcastViewerCount();
 
                             const call = app.peer.call(conn.peer, app.localStream);
                             
@@ -431,13 +441,24 @@
                             
                             conn.on('close', () => { 
                                 app.monitors = app.monitors.filter(c=>c.peer!==conn.peer); 
-                                document.getElementById('viewer-count').innerText = app.monitors.length; 
+                                app.broadcastViewerCount();
                             });
 
+                            let iceGraceTimer = null;
                             conn.peerConnection.oniceconnectionstatechange = () => {
-                                if(conn.peerConnection.iceConnectionState === 'disconnected') {
-                                     app.monitors = app.monitors.filter(m => m.peer !== conn.peer);
-                                     document.getElementById('viewer-count').innerText = app.monitors.length;
+                                const state = conn.peerConnection.iceConnectionState;
+                                if(state === 'disconnected') {
+                                    // Espera um pouco antes de remover: quedas curtas de rede costumam
+                                    // se recuperar sozinhas, remover na hora causava contagem "bugada".
+                                    clearTimeout(iceGraceTimer);
+                                    iceGraceTimer = setTimeout(() => {
+                                        if(conn.peerConnection.iceConnectionState === 'disconnected' || conn.peerConnection.iceConnectionState === 'failed') {
+                                            app.monitors = app.monitors.filter(m => m.peer !== conn.peer);
+                                            app.broadcastViewerCount();
+                                        }
+                                    }, 8000);
+                                } else if(state === 'connected' || state === 'completed') {
+                                    clearTimeout(iceGraceTimer);
                                 }
                             }
                         }
@@ -499,6 +520,12 @@
             connect: (targetId, pin) => {
                 const conn = app.peer.connect(targetId);
                 conn.on('open', () => { ui.showReconnect(false); conn.send({auth: pin}); });
+                conn.on('data', data => {
+                    if (data && typeof data.viewerCount === 'number') {
+                        document.getElementById('viewer-count').innerText = data.viewerCount;
+                        document.getElementById('badge-viewers').classList.remove('hidden');
+                    }
+                });
                 conn.on('close', () => {
                     ui.showReconnect(true);
                     clearTimeout(app.reconnectTimer);
