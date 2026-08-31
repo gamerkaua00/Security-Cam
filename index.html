@@ -138,6 +138,10 @@
                 <i class="fa-solid fa-expand" id="icon-fit"></i>
             </button>
 
+            <button id="btn-share" onclick="ui.toggleShare(true)" class="float-btn w-10 h-10 absolute top-36 right-5 z-50 hidden">
+                <i class="fa-solid fa-share-nodes"></i>
+            </button>
+
             <button id="btn-talk" class="talk-btn hidden" onmousedown="app.startTalk()" onmouseup="app.stopTalk()" ontouchstart="app.startTalk()" ontouchend="app.stopTalk()">
                 <i class="fa-solid fa-microphone"></i>
             </button>
@@ -165,6 +169,23 @@
         </div>
 
         <div id="stealth-layer" ondblclick="ui.toggleStealth()"></div>
+
+        <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-[70] bg-zinc-950 border border-emerald-500/50 text-emerald-100 text-sm font-bold px-5 py-3 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] opacity-0 pointer-events-none transition-opacity duration-300 max-w-[85%] text-center"></div>
+    </div>
+
+    <div id="share-overlay" class="absolute inset-0 z-[60] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-6">
+        <div class="w-full max-w-sm bg-zinc-950 border border-emerald-900/50 rounded-2xl p-6 text-center shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+            <i class="fa-solid fa-qrcode text-3xl text-emerald-500 mb-3 drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]"></i>
+            <h2 class="text-sm font-bold text-white tracking-tight mb-3">Convidar espectador</h2>
+            <div class="bg-white p-2 rounded-xl inline-block">
+                <img id="share-qr" src="" alt="QR code de acesso" width="180" height="180">
+            </div>
+            <p class="text-[10px] text-emerald-600 mt-3 mb-1">Escanear abre o app já preenchido</p>
+            <button onclick="ui.copyShareLink()" id="btn-copy-share" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-500 text-black font-bold py-3 rounded-xl transition-all">
+                <i class="fa-solid fa-copy mr-1"></i> COPIAR LINK
+            </button>
+            <button onclick="ui.toggleShare(false)" class="mt-2 w-full text-emerald-600 text-xs font-bold py-2">FECHAR</button>
+        </div>
     </div>
 
     <div id="credits-overlay" class="absolute inset-0 z-[60] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-6">
@@ -205,6 +226,18 @@
             iceCandidatePoolSize: 10
         };
         const PREFIX = "sc30-opt-";
+
+        // Sufixo aleatório persistente por nome de câmera: torna o ID final menos
+        // previsível/enumerável, mas mantém o mesmo ID entre reinícios da mesma câmera.
+        const getOrCreateSalt = (baseId) => {
+            const key = 'sc_salt_' + baseId;
+            let salt = localStorage.getItem(key);
+            if (!salt) {
+                salt = Math.random().toString(36).slice(2, 7);
+                localStorage.setItem(key, salt);
+            }
+            return salt;
+        };
 
         const m = { "name": "SecurityCam", "display": "standalone", "background_color": "#000000", "theme_color": "#000000", "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3682/3682323.png", "sizes": "512x512", "type": "image/png" }] };
         document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(new Blob([JSON.stringify(m)], {type: 'application/json'})));
@@ -306,7 +339,7 @@
             },
             toggleStealth: () => {
                 const el = document.getElementById('stealth-layer');
-                if(el.style.display === 'none') { el.style.display = 'block'; if(!sessionStorage.getItem('h30')) {alert("Stealth Ativo.\nDuplo clique na tela preta para sair."); sessionStorage.setItem('h30','1');}}
+                if(el.style.display === 'none') { el.style.display = 'block'; if(!sessionStorage.getItem('h30')) {ui.toast("Modo furtivo ativo — duplo clique na tela preta pra sair"); sessionStorage.setItem('h30','1');}}
                 else { el.style.display = 'none'; }
             },
             unlockAudio: () => {
@@ -321,6 +354,30 @@
             },
             toggleCredits: (show) => {
                 document.getElementById('credits-overlay').classList.toggle('hidden', !show);
+            },
+            toggleShare: (show) => {
+                if (show && app.myFullId) {
+                    const link = `${location.origin}${location.pathname}?id=${encodeURIComponent(app.myFullId)}&pin=${encodeURIComponent(app.myPin)}`;
+                    document.getElementById('share-qr').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(link)}`;
+                    app.shareLink = link;
+                }
+                document.getElementById('share-overlay').classList.toggle('hidden', !show);
+            },
+            copyShareLink: () => {
+                if (!app.shareLink) return;
+                navigator.clipboard.writeText(app.shareLink).then(() => {
+                    const btn = document.getElementById('btn-copy-share');
+                    const original = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> COPIADO!';
+                    setTimeout(() => { btn.innerHTML = original; }, 2000);
+                }).catch(() => ui.log("Não foi possível copiar"));
+            },
+            toast: (msg) => {
+                const el = document.getElementById('toast');
+                el.textContent = msg;
+                el.classList.remove('opacity-0');
+                clearTimeout(ui._toastTimer);
+                ui._toastTimer = setTimeout(() => el.classList.add('opacity-0'), 3500);
             }
         };
 
@@ -384,12 +441,28 @@
         const app = {
             peer: null, localStream: null, micStream: null, activeCall: null,
             monitors: [], currentFacing: 'environment', role: null, lastCreds: null, reconnectTimer: null, mediaConstraints: null,
+            cameraLockedUntil: 0, pinFailCount: 0, pinFailWindowStart: 0, myFullId: null, myPin: null, shareLink: null,
 
             broadcastViewerCount: () => {
                 const n = app.monitors.length;
                 const el = document.getElementById('viewer-count');
                 if (el) el.innerText = n;
                 app.monitors.forEach(m => { try { m.send({ viewerCount: n }); } catch(e) {} });
+            },
+
+            registerPinFailure: () => {
+                const now = Date.now();
+                if (!app.pinFailWindowStart || now - app.pinFailWindowStart > 120000) {
+                    // Janela de 2 minutos: reinicia a contagem se passou muito tempo
+                    app.pinFailWindowStart = now;
+                    app.pinFailCount = 0;
+                }
+                app.pinFailCount = (app.pinFailCount || 0) + 1;
+                if (app.pinFailCount >= 8) {
+                    app.cameraLockedUntil = now + 5 * 60000; // 5 minutos de bloqueio total
+                    app.pinFailCount = 0;
+                    ui.log("Muitas tentativas de PIN erradas — bloqueado 5min");
+                }
             },
 
             healLocalTrack: async (kind) => {
@@ -440,8 +513,14 @@
                 await requestWakeLock(); // Inicia o WakeLock
                 document.getElementById('ui-setup').classList.add('hidden');
                 document.getElementById('ui-app').classList.remove('hidden');
-                if(ui.mode === 'camera') app.startCamera(PREFIX + id, pin);
-                else app.startMonitor(PREFIX + id, pin);
+                if(ui.mode === 'camera') {
+                    const fullId = id + '-' + getOrCreateSalt(id);
+                    app.myFullId = fullId;
+                    app.myPin = pin;
+                    app.startCamera(PREFIX + fullId, pin);
+                } else {
+                    app.startMonitor(PREFIX + id, pin);
+                }
             },
             stop: () => {
                 if(app.localStream) { app.localStream.getTracks().forEach(t=>t.stop()); app.localStream=null; }
@@ -459,7 +538,7 @@
                 document.getElementById('ui-setup').classList.remove('hidden');
                 document.getElementById('loader').classList.remove('hidden');
                 document.getElementById('stealth-layer').style.display = 'none';
-                ['btn-talk','btn-swap','btn-sound','btn-fit','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay'].forEach(i=>document.getElementById(i).classList.add('hidden'));
+                ['btn-talk','btn-swap','btn-sound','btn-fit','btn-share','badge-viewers','badge-status','btn-stealth', 'reconnect-overlay'].forEach(i=>document.getElementById(i).classList.add('hidden'));
                 
                 if(ui.mode === 'monitor') storage.renderList();
             },
@@ -471,6 +550,7 @@
                 document.getElementById('badge-viewers').classList.remove('hidden');
                 document.getElementById('btn-stealth').classList.remove('hidden');
                 document.getElementById('btn-fit').classList.remove('hidden');
+                document.getElementById('btn-share').classList.remove('hidden');
                 document.getElementById('loader-txt').innerText = "INICIALIZANDO LENTES...";
 
                 try {
@@ -497,7 +577,7 @@
                     });
 
                 } catch(e) { 
-                    alert("Erro Fatal: Sem acesso à câmera."); 
+                    ui.toast("Sem acesso à câmera"); 
                     app.stop(); return; 
                 }
 
@@ -510,7 +590,7 @@
                 });
                 
                 app.peer.on('error', e => {
-                    if(e.type==='unavailable-id') { alert("ID em uso!"); app.stop(); }
+                    if(e.type==='unavailable-id') { ui.toast("Esse ID já está em uso, escolha outro"); app.stop(); }
                     else ui.log("Erro: " + e.type);
                 });
 
@@ -535,6 +615,13 @@
                 });
 
                 app.peer.on('connection', conn => {
+                    // Lockout global: se alguém já esgotou tentativas reconectando várias vezes,
+                    // bloqueia novas tentativas por um tempo, independente da conexão usada.
+                    if (Date.now() < (app.cameraLockedUntil || 0)) {
+                        conn.close();
+                        return;
+                    }
+
                     let pinAttempts = 0;
                     let authorized = false;
                     conn.on('data', data => {
@@ -543,12 +630,13 @@
                             if (data && data.pong) conn._lastPong = Date.now();
                             return;
                         }
-                        if (pinAttempts >= 3) {
+                        if (pinAttempts >= 3 || Date.now() < (app.cameraLockedUntil || 0)) {
                             conn.close();
                             return;
                         }
                         if (data.auth !== pin) {
                             pinAttempts++;
+                            app.registerPinFailure();
                             if (pinAttempts >= 3) conn.close();
                             return;
                         }
@@ -701,7 +789,7 @@
             startTalk: async () => {
                 if (!app.activeCall || ui.mode !== 'monitor') return;
                 document.getElementById('btn-talk').classList.add('talking');
-                try { app.micStream = await navigator.mediaDevices.getUserMedia({audio:true}); app.peer.call(app.activeCall.peer, app.micStream); } catch(e){ alert("Mic bloqueado"); }
+                try { app.micStream = await navigator.mediaDevices.getUserMedia({audio:true}); app.peer.call(app.activeCall.peer, app.micStream); } catch(e){ ui.toast("Microfone bloqueado"); }
             },
             stopTalk: () => {
                 document.getElementById('btn-talk').classList.remove('talking');
@@ -733,6 +821,17 @@
                 }));
             }
         };
+
+        // Se aberto via link/QR compartilhado (?id=...&pin=...), pré-preenche o modo espectador
+        (() => {
+            const params = new URLSearchParams(location.search);
+            const sharedId = params.get('id'), sharedPin = params.get('pin');
+            if (sharedId) {
+                ui.setMode('monitor');
+                document.getElementById('inp-id').value = sharedId;
+                if (sharedPin) document.getElementById('inp-pin').value = sharedPin;
+            }
+        })();
     </script>
 </body>
 </html>
